@@ -1,0 +1,17 @@
+{
+  "name": "dsh-codex-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PureGamma Codex CLI LLM provider via local ChatGPT login",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

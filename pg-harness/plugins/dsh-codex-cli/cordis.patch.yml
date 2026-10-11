@@ -1,0 +1,7 @@
+- insert:
+    - id: codex-cli
+      name: dsh-codex-cli
+      config:
+        models:
+          - codex-default
+          - gpt-6.1-sol
