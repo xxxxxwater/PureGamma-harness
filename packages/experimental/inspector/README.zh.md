@@ -133,7 +133,7 @@ Client 断联时，其 Console execution context 与 live object id 会立即销
 <a id="host-fetch-capture"></a>
 ## Host fetch 采集
 
-fetch 采集默认开启，记录完整 URL、全部请求与响应 headers、请求体、响应体、状态、时间、错误和取消。它不脱敏 credential、Cookie、query value 或 payload。body 采集读取 clone；原始 fetch resolve 后，调用方立即拿到原始 Response。
+fetch 采集默认开启，记录完整 URL、全部请求与响应 headers、请求体、响应体、状态、时间、错误和取消。它不脱敏 credential、Cookie、query value 或 payload。body 采集读取 clone；原始 fetch resolve 后，调用方立即拿到原始 Response。 采集支持包装可配置 fetch 访问器返回的当前函数；停止时若该包装仍持有此属性，则恢复原始属性描述符。不可配置的访问器会被拒绝。
 
 配置的 body 上限限制保留量，而不选择字段：采集保留前缀并标记 truncated。`Network.getRequestPostData` 与 `Network.getResponseBody` 读取 Worker 保留的字节。`Network.streamResourceContent` 返回已缓冲的前缀，并仅为发起调用的 DevTools 连接把后续 response 字节附加到 `Network.dataReceived`，以驱动实时 Response 与 EventStream 视图。直接调用 Undici Client/Dispatcher，以及插件激活前保存的 fetch 引用，不在观察范围内。
 

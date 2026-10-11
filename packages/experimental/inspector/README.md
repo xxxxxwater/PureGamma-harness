@@ -133,7 +133,7 @@ When a Client disconnects, its Console execution context and live object ids are
 <a id="host-fetch-capture"></a>
 ## Host fetch capture
 
-Fetch capture is on by default and records the complete URL, all request and response headers, request body, response body, status, timing, errors, and cancellation. It does not redact credentials, cookies, query values, or payloads. Body capture reads clones; the caller receives the original Response as soon as the original fetch resolves.
+Fetch capture is on by default and records the complete URL, all request and response headers, request body, response body, status, timing, errors, and cancellation. It does not redact credentials, cookies, query values, or payloads. Body capture reads clones; the caller receives the original Response as soon as the original fetch resolves. Capture wraps the current function from a configurable fetch accessor and restores the original property descriptor on stop if its wrapper still owns the property; non-configurable accessors are rejected.
 
 The configured body limits bound retention rather than select fields: capture keeps the prefix and marks the result truncated. `Network.getRequestPostData` and `Network.getResponseBody` read the Worker's retained bytes. `Network.streamResourceContent` returns the buffered prefix and adds later response bytes to `Network.dataReceived` for that DevTools connection, which drives live Response and EventStream views. Direct Undici Client/Dispatcher calls and fetch references retained before plugin activation are outside this observer.
 

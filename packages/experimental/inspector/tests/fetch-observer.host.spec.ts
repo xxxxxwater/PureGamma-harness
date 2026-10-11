@@ -265,17 +265,36 @@ describe('full fetch observer', () => {
     })).toThrow('globalThis.fetch is unavailable')
   })
 
-  it('rejects an accessor fetch property', () => {
-    const nativeFetch = globalThis.fetch
-    Object.defineProperty(globalThis, 'fetch', {
+  it('captures through a configurable plugin accessor and restores its exact descriptor', async () => {
+    const records: InspectorRecordInput[] = []
+    const nativeFetch = vi.fn(() => Promise.resolve(new Response('plugin response')))
+    const descriptor = {
       configurable: true,
+      enumerable: true,
       get: () => nativeFetch,
-    })
-    expect(() => installFetchObserver({ publish: vi.fn() }, {
-      maxRequestBodyBytes: 1,
-      maxResponseBodyBytes: 1,
-      maxChunkBytes: 1,
-    })).toThrow('globalThis.fetch is an accessor')
+      set: vi.fn(),
+    }
+    Object.defineProperty(globalThis, 'fetch', descriptor)
+    observer = installFetchObserver({
+      publish(topic, data, monotonicMs = performance.now()) { records.push({ topic, payload: data, monotonicMs }) },
+    }, { maxRequestBodyBytes: 1_024, maxResponseBodyBytes: 1_024, maxChunkBytes: 1_024 })
+    expect(await (await fetch('https://example.test/plugin')).text()).toBe('plugin response')
+    await vi.waitFor(() => { expect(records.some(record => record.topic === 'fetch/end')).toBe(true) })
+    expect(nativeFetch).toHaveBeenCalledOnce()
+    expect(decodeChunks(records, 'fetch/response-body-chunk')).toBe('plugin response')
+    await observer.stop()
+    expect(Object.getOwnPropertyDescriptor(globalThis, 'fetch')).toEqual(descriptor)
+    expect(globalThis.fetch).toBe(nativeFetch)
+    expect(descriptor.set).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-configurable accessor without changing it', () => {
+    const scope = {}
+    const descriptor = { get: () => globalThis.fetch, configurable: false }
+    Object.defineProperty(scope, 'fetch', descriptor)
+    expect(() => { runInNewContext(`(${installFetchObserver.toString()})({}, {})`, { globalThis: scope }) })
+      .toThrow('non-configurable accessor')
+    expect(Object.getOwnPropertyDescriptor(scope, 'fetch')).toMatchObject(descriptor)
   })
 
   it('contains publisher failures from asynchronous body completion', async () => {

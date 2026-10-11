@@ -48,8 +48,8 @@ export function installFetchObserver(
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
   const original = globalThis.fetch
   if (typeof original !== 'function') throw new Error('inspector: globalThis.fetch is unavailable')
-  if (descriptor !== undefined && !('value' in descriptor)) {
-    throw new Error('inspector: globalThis.fetch is an accessor and cannot be observed safely')
+  if (descriptor !== undefined && !('value' in descriptor) && !descriptor.configurable) {
+    throw new Error('inspector: globalThis.fetch is a non-configurable accessor and cannot be observed safely')
   }
 
   const controller = new AbortController()
@@ -150,8 +150,8 @@ export function installFetchObserver(
 
   Object.defineProperty(observedFetch, 'name', { value: original.name, configurable: true })
   Object.defineProperty(observedFetch, 'length', { value: original.length, configurable: true })
-  Object.defineProperty(globalThis, 'fetch', descriptor === undefined
-    ? { value: observedFetch, writable: true, configurable: true }
+  Object.defineProperty(globalThis, 'fetch', descriptor === undefined || !('value' in descriptor)
+    ? { value: observedFetch, writable: true, configurable: true, enumerable: descriptor?.enumerable ?? false }
     : { ...descriptor, value: observedFetch })
 
   let stopped: Promise<void> | undefined

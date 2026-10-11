@@ -43,7 +43,7 @@
 
 Codex 与 Claude Code 子智能体组合已包含在上游源码和运行时中；服务提供商仍需本机配置。内置代码不提供任何账户、订阅或 API 凭据。能力图标栏展示已挂载的插件，置顶选择保存在设备上；部分入口打开相应设置或工具面板，而非独立页面。
 
-安装器也会在依赖安装完成后，仅对内置的 `dsh-at-file` 0.7.0、`dsh-magicpath` 0.1.0 和 `billion-context` 0.1.190 应用对应版本的兼容补丁。`at-file` 保留 `@` 文件选择、过滤规则和启用开关，设置独立持久化到 `~/.dsh/pg-harness-state/dsh-at-file.json`（或 `DSH_HOME` 所指目录），不再调用已移除的 `settings.register()`；MagicPath 保留原始 CLI 命令与完整结果字段，改为新版工具注册接受的 JSON Schema；billion-context 保留请求处理与上下文压缩，但默认使用直接 `fetch` 包装，不再通过全局属性访问器与 Node 诊断产生冲突。如需显式恢复上游属性拦截模式，可设置 `BILI_RECLAIM_FETCH_PATCH=1`。安装器会在 `pg-harness-backups` 下备份所有改动的入口文件；非目标版本与已修补文件不会修改。运行安装器后需重启 Harness。
+安装器也会在依赖安装完成后，仅对内置的 `dsh-at-file` 0.7.0、`dsh-magicpath` 0.1.0 和 `billion-context` 0.1.190 应用对应版本的兼容补丁。`at-file` 保留 `@` 文件选择、过滤规则和启用开关，设置独立持久化到 `~/.dsh/pg-harness-state/dsh-at-file.json`（或 `DSH_HOME` 所指目录），不再调用已移除的 `settings.register()`，宿主与浏览器的严格远程编解码器均使用新版 schema 工厂，文件选择器等待远程接口完成挂载；MagicPath 保留原始 CLI 命令与完整结果字段，改为新版工具注册接受的 JSON Schema，并在插件卸载时撤销工具注册；billion-context 保留请求处理与上下文压缩，但默认使用直接 `fetch` 包装，不再通过全局属性访问器与 Node 诊断产生冲突。如需显式恢复上游属性拦截模式，可设置 `BILI_RECLAIM_FETCH_PATCH=1`。安装器会在 `pg-harness-backups` 下备份所有改动的入口文件；非目标版本不会修改；已有 v1 补丁会获得编解码器与卸载清理修复，已保存设置保持不变。运行安装器后需重启 Harness。
 
 安装程序为内置 `dsh-univer-office` 0.3.7 客户端加入预览兼容修复。原生调用和嵌套代码工具调用均可生成会话审阅卡片与实时窗口；在右侧边栏打开 `.univer` 文件即可使用文件预览。修复订阅当前轮次的 Chat 工具数据源，因此嵌套调用结果无需刷新整个会话即可显示。插件设置与依赖版本保持不变，原客户端会备份；无法识别的 0.3.7 构建会拒绝修改，其他版本保持原样。可读实现位于 `plugin-patches/univer-office`。
 

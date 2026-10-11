@@ -1,9 +1,10 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const AT_FILE_MARKER = '// PureGamma at-file settings compatibility v1'
-const MAGICPATH_MARKER = '// PureGamma MagicPath tool schema compatibility v1'
+const AT_FILE_MARKER = '// PureGamma at-file settings compatibility v3'
+const MAGICPATH_MARKER = '// PureGamma MagicPath tool schema compatibility v2'
 const BILLION_MARKER = '// PureGamma billion-context fetch compatibility v1'
+const AT_FILE_CLIENT_MARKER = '// PureGamma at-file Remote client compatibility v1'
 
 function replaceOnce(source, before, after, plugin) {
   const at = source.indexOf(before)
@@ -13,13 +14,47 @@ function replaceOnce(source, before, after, plugin) {
   return source.slice(0, at) + after + source.slice(at + before.length)
 }
 
+function patchAtFileCodecs(source) {
+  const codecs = [
+    ['sessionIdSchema', 1], ['external_exports.array(fileEntrySchema)', 1],
+    ['atFileSettingsSchema', 2], ['atFileSettingsUpdateSchema', 1],
+  ]
+  for (const [schema, count] of codecs) {
+    const before = 'schema: ' + schema
+    if (source.split(before).length - 1 !== count) throw new Error('dsh-at-file: unexpected strict codec declarations')
+    source = source.replaceAll(before, 'create: () => ' + schema)
+  }
+  return source
+}
+
+/** Mount the browser Remote with lazy strict codecs and await its registration. */
+export function patchAtFileClient(source) {
+  if (source.includes(AT_FILE_CLIENT_MARKER)) return source
+  source = patchAtFileCodecs(source)
+  source = replaceOnce(source, 'function apply(ctx) {', 'async function apply(ctx) {', 'dsh-at-file client')
+  source = replaceOnce(source, '  ctx.effect(async () => {', '  await ctx.effect(async () => {', 'dsh-at-file client')
+  return AT_FILE_CLIENT_MARKER + '\n' + source
+}
+
 /** Supply local durable settings now that the host no longer exposes settings.register(). */
 export function patchAtFile(source) {
   if (source.includes(AT_FILE_MARKER)) return source
+  const priorMarker = '// PureGamma at-file settings compatibility v1'
+  const v2Marker = '// PureGamma at-file settings compatibility v2'
+  if (source.includes(v2Marker)) {
+    source = replaceOnce(source, v2Marker, AT_FILE_MARKER, 'dsh-at-file')
+    source = replaceOnce(source, 'process.env.DSH_HOME', 'pgProcess.env.DSH_HOME', 'dsh-at-file')
+    source = replaceOnce(source, 'process.pid + ".pg-pending"', 'pgProcess.pid + ".pg-pending"', 'dsh-at-file')
+    return 'import pgProcess from "node:process";\n' + source
+  }
+  if (source.includes(priorMarker)) {
+    return patchAtFile(replaceOnce(patchAtFileCodecs(source), priorMarker, v2Marker, 'dsh-at-file'))
+  }
+  source = patchAtFileCodecs(source)
   const old = 'function registerAtFileSettings(ctx) {\n  return ctx.settings.register(AT_FILE_NAMESPACE, AtFileSettingsSchema, { applies: "live" });\n}'
   const implementation = [
     'function registerAtFileSettings(ctx) {',
-    '  const file = pgJoin(process.env.DSH_HOME || pgJoin(pgHome(), ".dsh"), "pg-harness-state", "dsh-at-file.json");',
+    '  const file = pgJoin(pgProcess.env.DSH_HOME || pgJoin(pgHome(), ".dsh"), "pg-harness-state", "dsh-at-file.json");',
     '  const read = () => {',
     '    if (!pgExists(file)) return AtFileSettingsSchema({});',
     '    return AtFileSettingsSchema(JSON.parse(pgRead(file, "utf8")));',
@@ -30,7 +65,7 @@ export function patchAtFile(source) {
     '    async update(patch) {',
     '      const next = AtFileSettingsSchema({ ...state, ...patch });',
     '      pgMkdir(pgDirname(file), { recursive: true, mode: 0o700 });',
-    '      const pending = file + "." + process.pid + ".pg-pending";',
+    '      const pending = file + "." + pgProcess.pid + ".pg-pending";',
     '      try {',
     '        pgWrite(pending, JSON.stringify(next, null, 2) + "\\n", { mode: 0o600, flag: "wx" });',
     '        pgRename(pending, file);',
@@ -44,6 +79,7 @@ export function patchAtFile(source) {
     '}',
   ].join('\n')
   const imports = [
+    'import pgProcess from "node:process";',
     'import { existsSync as pgExists, readFileSync as pgRead, mkdirSync as pgMkdir, writeFileSync as pgWrite, renameSync as pgRename, unlinkSync as pgUnlink } from "node:fs";',
     'import { join as pgJoin, dirname as pgDirname } from "node:path";',
     'import { homedir as pgHome } from "node:os";',
@@ -55,6 +91,12 @@ export function patchAtFile(source) {
 /** Declare only supported raw JSON Schema keywords while preserving CLI flags and arbitrary JSON results. */
 export function patchMagicPath(source) {
   if (source.includes(MAGICPATH_MARKER)) return source
+  const priorMarker = '// PureGamma MagicPath tool schema compatibility v1'
+  const alreadyAdapted = source.includes(priorMarker)
+  source = replaceOnce(source, '  ctx.tools.register({', '  ctx.effect(() => ctx.tools.register({', 'dsh-magicpath')
+  source = replaceOnce(source, '    },\n  })\n}\n\n/**\n * Turn a process outcome',
+    '    },\n  }), "magicpath: tool")\n}\n\n/**\n * Turn a process outcome', 'dsh-magicpath')
+  if (alreadyAdapted) return replaceOnce(source, priorMarker, MAGICPATH_MARKER, 'dsh-magicpath')
   const changes = [
     ["additionalProperties: { type: ['string', 'number', 'boolean'] },", 'additionalProperties: true,'],
     ["exitCode: { type: ['integer', 'null'] },", "exitCode: { oneOf: [{ type: 'integer' }, { type: 'null' }] },"],
@@ -87,6 +129,7 @@ export function patchBillionContext(source) {
 
 const PATCHES = [
   { name: 'dsh-at-file', version: '0.7.0', path: 'lib/index.js', backup: 'dsh-at-file-index.js', patch: patchAtFile },
+  { name: 'dsh-at-file', version: '0.7.0', path: 'lib/client.js', backup: 'dsh-at-file-client.js', patch: patchAtFileClient },
   { name: 'dsh-magicpath', version: '0.1.0', path: 'lib/index.js', backup: 'dsh-magicpath-index.js', patch: patchMagicPath },
   { name: 'billion-context', version: '0.1.190', path: 'dist/agent/dsh-native.js', backup: 'billion-context-dsh-native.js', patch: patchBillionContext },
 ]
