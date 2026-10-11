@@ -1,0 +1,3 @@
+- insert:
+    - id: codex-cli-models
+      name: dsh-codex-cli-models

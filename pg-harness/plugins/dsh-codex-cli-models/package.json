@@ -1,0 +1,41 @@
+{
+  "name": "dsh-codex-cli-models",
+  "version": "0.1.0",
+  "description": "在 PureGamma Harness 会话中使用 Codex 模型，通过浏览器登录 ChatGPT，复用本机 Codex CLI 登录。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "app-server.mjs",
+    "auth.mjs",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg",
+    "README.zh.md"
+  ],
+  "license": "MIT",
+  "icon": "./icon.svg",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "browser": "client.js"
+}
