@@ -1,0 +1,30 @@
+name: PureGamma Codex CLI plugin validation
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'pg-harness/plugins/dsh-codex-cli/**'
+      - 'pg-harness/install.mjs'
+      - 'pg-harness/install.test.mjs'
+      - '.github/workflows/puregamma-codex-cli.yml'
+  pull_request:
+    paths:
+      - 'pg-harness/plugins/dsh-codex-cli/**'
+      - 'pg-harness/install.mjs'
+      - 'pg-harness/install.test.mjs'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Parse ESM and check executable contract
+        run: |
+          node --check pg-harness/plugins/dsh-codex-cli/index.js
+          node --check pg-harness/install.mjs
+      - name: Test Codex provider and PureGamma installer with mock CLI
+        run: node --test pg-harness/plugins/dsh-codex-cli/index.test.mjs pg-harness/install.test.mjs
