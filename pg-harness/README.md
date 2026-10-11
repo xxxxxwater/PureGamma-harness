@@ -23,10 +23,12 @@ You can move the Mac app after plugin installation. Mac builds are ad-hoc signed
 
 ## Plugins and local setup
 
-The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin archives, their exact versions, licenses, SHA-256 hashes, and the official bundles. The installer validates each new archive and retains an existing dependency's version and source. Four PureGamma UI packages add the plugin rail, IDE code colors, blue messages, and Chinese/English pixel typography.
+The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin archives, their exact versions, licenses, SHA-256 hashes, and the official bundles. The installer validates each new archive and retains an existing dependency's version and source. Four PureGamma UI packages add the plugin rail, IDE code colors, blue messages, and Chinese/English pixel typography. Native plugins add Codex models and a macOS completion chime.
 
 | Package | Capability and setup |
 | --- | --- |
+| [`dsh-codex-cli-models`](plugins/dsh-codex-cli-models/README.md) | Use locally authenticated Codex models with Harness history and tools; sign in through Settings → Codex CLI. |
+| [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.md) | Play one chime per successful top-level turn on macOS. |
 | `dsh-context` | Inspect how the context is composed and how it changes. |
 | `billion-context` | Compress conversation context; configure its model-related settings locally. |
 | `@vectorize-io/hindsight-coding-agents` | Integrate long-term coding memory; configure a Hindsight connection locally. |
@@ -41,11 +43,13 @@ The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin ar
 | `dshmarket` | Browse, search, and install community plugins. |
 | `open-sea-skin` | Display an optional ocean skin where WebGPU is supported. |
 
-[Codex CLI Model Provider](plugins/dsh-codex-cli/README.md) additionally offers locally authenticated Codex as a selectable **main chat model** (text only; does not bridge Harness tools). Run `codex login` on the same OS account, then reinstall the plugin bundle and select `codex-cli` in Models. Codex and Claude Code subagent bundles are part of the upstream source and runtime; their providers require local configuration. Included code does not supply any account, subscription, or API credentials. The capability rail shows mounted plugins and keeps pinned choices on the device; some entries open the relevant settings or tool panel rather than a dedicated page.
+The Codex model plugin requires the official Codex CLI installed locally. Every user authorizes their own ChatGPT account in the browser; an existing CLI login is reused automatically. Requests share that account’s Codex / ChatGPT Work allowance. The installer mounts the native provider instead of the earlier text-only `dsh-codex-cli` bundle and retains its dependency for rollback. Codex and Claude Code subagent bundles are part of the upstream source and runtime; their providers require local configuration. Included code does not supply any account, subscription, or API credentials. The capability rail shows mounted plugins and keeps pinned choices on the device; some entries open the relevant settings or tool panel rather than a dedicated page.
 
 The installer also applies version-scoped compatibility patches to the shipped `dsh-at-file` 0.7.0, `dsh-magicpath` 0.1.0, and `billion-context` 0.1.190 packages after dependencies are installed. At-file keeps its live `@` picker, file filters, and enable switch, storing settings at `~/.dsh/pg-harness-state/dsh-at-file.json` (or under `DSH_HOME`); this avoids the removed `settings.register()` API. Both Host and browser strict Remote codecs use the current schema factories, and the picker waits for its Remote namespace to mount. MagicPath retains its official CLI commands and result fields with validated, supported tool JSON Schemas, and withdraws its tool registration on unload. Billion-context keeps its request interception and context compression but defaults to direct `fetch` wrapping rather than a global property accessor, avoiding interference with Node diagnostics; `BILI_RECLAIM_FETCH_PATCH=1` explicitly opts back into upstream accessor re-arming. Each changed entry point is backed up in the install's `pg-harness-backups` folder; different package versions remain untouched, and existing v1 repairs receive the codec and cleanup fixes without replacing settings. Restart Harness after running the plugin installer to load the fixes.
 
 The installer adds a preview compatibility fix to the bundled `dsh-univer-office` 0.3.7 client. Native calls and nested code-tool calls now populate conversation review cards and live windows; open `.univer` files in the right sidebar for the file viewer. The fix subscribes to the current turn's Chat tool source, so nested call results appear without a full conversation refresh. It preserves plugin settings and dependency pins, backs up the original client, and refuses an unrecognized 0.3.7 build; other versions are left unchanged. The readable implementation is under `plugin-patches/univer-office`.
+
+The bundled Better Sidebar 0.25.0 terminal uses the current Connection service and retains its Host/Origin checks, including native-shell WebSocket support. The installer applies the version-specific repair after dependency installation and backs up the original entry point.
 
 <a id="build-and-verify"></a>
 
@@ -59,6 +63,6 @@ Use Node.js 24, the pnpm version in `package.json`, and a native host that match
 | Apple Silicon Mac | `pnpm run package:desktop:mac:arm64:unsigned --dir` |
 | Windows x64 | `pnpm run package:desktop:win:x64:unsigned` |
 
-The manual [release build workflow](../.github/workflows/puregamma-desktop-release.yml) builds Windows and Apple Silicon on separate native runners. The source archive comes from the release commit. Run `node --test pg-harness/install.test.mjs pg-harness/plugin-patches/bundled-compat.test.mjs pg-harness/plugin-patches/univer-office/preview.test.mjs` for profile preservation and office preview regressions. The preview fixture exercises the shipped client with real React and includes the unpatched client's missing-preview case. The owning client and desktop tests cover the brand and packaging contracts.
+The manual [release build workflow](../.github/workflows/puregamma-desktop-release.yml) builds Windows and Apple Silicon on separate native runners. The source archive comes from the release commit. Run `node --test pg-harness/install.test.mjs pg-harness/plugin-patches/bundled-compat.test.mjs pg-harness/plugin-patches/univer-office/preview.test.mjs pg-harness/plugins/dsh-codex-cli-models/plugin.test.mjs pg-harness/plugins/dsh-task-completion-chime/plugin.test.mjs` for profile preservation and office preview regressions. The preview fixture exercises the shipped client with real React and includes the unpatched client's missing-preview case. The owning client and desktop tests cover the brand and packaging contracts.
 
 The app carries this directory in its resources. The Windows helper and Mac command use the bundled runtime to run `install.mjs`; optional plugins are added to the reserved desktop profile. The upstream MIT license and third-party notices apply, and the pixel font licenses are included under `licenses`.

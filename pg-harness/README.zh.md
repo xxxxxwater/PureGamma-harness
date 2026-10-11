@@ -23,10 +23,12 @@
 
 ## 插件与本地配置
 
-[清单](bundled-plugins/inventory.json)记录 13 个第三方插件归档、确切版本、许可证、SHA-256 校验值及官方插件组合。安装程序校验新归档，并保留已有依赖的版本和来源。4 个 PureGamma 界面插件提供插件图标栏、IDE 代码配色、蓝色消息和中英文像素字体。
+[清单](bundled-plugins/inventory.json)记录 13 个第三方插件归档、确切版本、许可证、SHA-256 校验值及官方插件组合。安装程序校验新归档，并保留已有依赖的版本和来源。4 个 PureGamma 界面插件提供插件图标栏、IDE 代码配色、蓝色消息和中英文像素字体。本机插件另外提供 Codex 模型和 macOS 任务完成提示音。
 
 | 插件 | 能力与配置 |
 | --- | --- |
+| [`dsh-codex-cli-models`](plugins/dsh-codex-cli-models/README.zh.md) | 使用本机 Codex 登录调用模型，支持 Harness 历史和工具；在设置 → Codex CLI 中登录。 |
+| [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.zh.md) | macOS 上每次主会话任务正常完成后播放一次提示音。 |
 | `dsh-context` | 查看上下文构成及其变化。 |
 | `billion-context` | 压缩会话上下文；在本机配置与模型有关的设置。 |
 | `@vectorize-io/hindsight-coding-agents` | 接入编程长期记忆；在本机配置 Hindsight 连接。 |
@@ -41,11 +43,13 @@
 | `dshmarket` | 浏览、搜索和安装社区插件。 |
 | `open-sea-skin` | 在支持 WebGPU 的环境显示可选海洋皮肤。 |
 
-新增的 [Codex CLI 模型插件](plugins/dsh-codex-cli/README.md) 可以在现有聊天会话的模型选择器中调用本机 Codex 登录态（当前只支持文本，暂不桥接 Harness 原生工具）。请先在同一系统用户下运行 `codex login`，重新安装插件后选择 `codex-cli`。Codex 与 Claude Code 子智能体组合已包含在上游源码和运行时中；服务提供商仍需本机配置。内置代码不提供任何账户、订阅或 API 凭据。能力图标栏展示已挂载的插件，置顶选择保存在设备上；部分入口打开相应设置或工具面板，而非独立页面。
+Codex 模型插件要求本机安装官方 Codex CLI。每位用户都需在浏览器授权自己的 ChatGPT 账号；已有 CLI 登录时自动复用。请求共享该账号的 Codex / ChatGPT Work 工作额度。安装器启用原生提供商，替换早期仅支持文本的 `dsh-codex-cli` 组合，并保留旧依赖以便回退。Codex 与 Claude Code 子智能体组合已包含在上游源码和运行时中；服务提供商仍需本机配置。内置代码不提供任何账户、订阅或 API 凭据。能力图标栏展示已挂载的插件，置顶选择保存在设备上；部分入口打开相应设置或工具面板，而非独立页面。
 
 安装器也会在依赖安装完成后，仅对内置的 `dsh-at-file` 0.7.0、`dsh-magicpath` 0.1.0 和 `billion-context` 0.1.190 应用对应版本的兼容补丁。`at-file` 保留 `@` 文件选择、过滤规则和启用开关，设置独立持久化到 `~/.dsh/pg-harness-state/dsh-at-file.json`（或 `DSH_HOME` 所指目录），不再调用已移除的 `settings.register()`，宿主与浏览器的严格远程编解码器均使用新版 schema 工厂，文件选择器等待远程接口完成挂载；MagicPath 保留原始 CLI 命令与完整结果字段，改为新版工具注册接受的 JSON Schema，并在插件卸载时撤销工具注册；billion-context 保留请求处理与上下文压缩，但默认使用直接 `fetch` 包装，不再通过全局属性访问器与 Node 诊断产生冲突。如需显式恢复上游属性拦截模式，可设置 `BILI_RECLAIM_FETCH_PATCH=1`。安装器会在 `pg-harness-backups` 下备份所有改动的入口文件；非目标版本不会修改；已有 v1 补丁会获得编解码器与卸载清理修复，已保存设置保持不变。运行安装器后需重启 Harness。
 
 安装程序为内置 `dsh-univer-office` 0.3.7 客户端加入预览兼容修复。原生调用和嵌套代码工具调用均可生成会话审阅卡片与实时窗口；在右侧边栏打开 `.univer` 文件即可使用文件预览。修复订阅当前轮次的 Chat 工具数据源，因此嵌套调用结果无需刷新整个会话即可显示。插件设置与依赖版本保持不变，原客户端会备份；无法识别的 0.3.7 构建会拒绝修改，其他版本保持原样。可读实现位于 `plugin-patches/univer-office`。
+
+内置 Better Sidebar 0.25.0 的终端使用新版 Connection 服务，保留 Host/Origin 检查和本机桌面 WebSocket 支持。安装器在依赖安装完成后应用对应版本的修复，并备份原始入口文件。
 
 <a id="build-and-verify"></a>
 
@@ -59,6 +63,6 @@
 | Apple Silicon Mac | `pnpm run package:desktop:mac:arm64:unsigned --dir` |
 | Windows x64 | `pnpm run package:desktop:win:x64:unsigned` |
 
-手动[发布构建工作流](../.github/workflows/puregamma-desktop-release.yml)在独立原生主机上构建 Windows 和 Apple Silicon 版本。源码包来自发布提交。运行 `node --test pg-harness/install.test.mjs pg-harness/plugin-patches/bundled-compat.test.mjs pg-harness/plugin-patches/univer-office/preview.test.mjs` 验证配置保留与办公预览回归。预览测试通过真实 React 运行已发布客户端，并包含未修补客户端缺失预览的对照场景。对应的客户端与桌面测试覆盖品牌及打包约定。
+手动[发布构建工作流](../.github/workflows/puregamma-desktop-release.yml)在独立原生主机上构建 Windows 和 Apple Silicon 版本。源码包来自发布提交。运行 `node --test pg-harness/install.test.mjs pg-harness/plugin-patches/bundled-compat.test.mjs pg-harness/plugin-patches/univer-office/preview.test.mjs pg-harness/plugins/dsh-codex-cli-models/plugin.test.mjs pg-harness/plugins/dsh-task-completion-chime/plugin.test.mjs` 验证配置保留与办公预览回归。预览测试通过真实 React 运行已发布客户端，并包含未修补客户端缺失预览的对照场景。对应的客户端与桌面测试覆盖品牌及打包约定。
 
 应用的资源目录包含本目录。Windows 配套程序与 Mac 命令使用内置运行时执行 `install.mjs`，将可选插件添加到专用桌面配置中。适用上游 MIT 许可证和第三方声明，像素字体许可证包含在 `licenses` 下。
