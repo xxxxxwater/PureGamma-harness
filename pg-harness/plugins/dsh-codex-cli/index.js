@@ -142,6 +142,8 @@ export async function* codexStream(options, config = {}) {
   timeout.unref()
   options.signal?.addEventListener('abort', abort, { once: true })
   child.stdin.on('error', () => {})
+  // stderr may contain diagnostics and authentication details: drain it, never log it.
+  child.stderr.resume()
   child.stdin.end(input)
   try {
     const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
@@ -190,6 +192,8 @@ export function apply(ctx, config = {}) {
   const models = modelCatalog(config)
   const adapter = {
     providerInfo: () => ({ id: PROVIDER, name: 'OpenAI Codex CLI (ChatGPT login)' }),
+    providerRetryPolicy: () => undefined,
+    imageRequestPricing: () => undefined,
     listModels: async () => models.map(id => ({
       provider: PROVIDER, id,
       name: id === 'codex-default' ? 'Codex · CLI default' : 'Codex · ' + id,
