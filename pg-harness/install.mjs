@@ -33,7 +33,11 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
   manifest.dsh ??= {}
   manifest.dsh.profile ??= {}
   manifest.dsh.profile.bundles ??= ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
-  for (const name of ['dsh-plugin-rail', 'dsh-vscode-code-theme', 'dsh-imessage-blue', 'dsh-pixel-font', 'dsh-codex-cli']) {
+  // Both generations register codex-cli; keep the old dependency for rollback but mount only the native adapter.
+  manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter(name => name !== 'dsh-codex-cli')
+  const localPlugins = ['dsh-plugin-rail', 'dsh-vscode-code-theme', 'dsh-imessage-blue', 'dsh-pixel-font', 'dsh-codex-cli-models']
+  if (process.platform === 'darwin') localPlugins.push('dsh-task-completion-chime')
+  for (const name of localPlugins) {
     const destination = join(home, 'local-plugins', name)
     if (existsSync(destination)) cpSync(destination, join(backup, name), { recursive: true })
     cpSync(join(source, name), destination, { recursive: true })

@@ -18,6 +18,12 @@ test('installation preserves third-party bundles and user settings and remains r
     const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(result.dependencies.retained, '1.2.3')
     assert.equal(result.dsh.profile.bundles[0], 'retained')
+    assert.equal(result.dependencies['dsh-codex-cli-models'], 'link:../../local-plugins/dsh-codex-cli-models')
+    assert.ok(result.dsh.profile.bundles.includes('dsh-codex-cli-models'))
+    assert.equal(result.dsh.profile.bundles.includes('dsh-task-completion-chime'), process.platform === 'darwin')
+    const codex = join(home, 'local-plugins', 'dsh-codex-cli-models')
+    assert.ok(readFileSync(join(codex, 'client.js'), 'utf8').includes('使用 ChatGPT 登录'))
+    assert.equal(readFileSync(join(codex, 'package.json'), 'utf8'), readFileSync(new URL('./plugins/dsh-codex-cli-models/package.json', import.meta.url), 'utf8'))
     const inventory = JSON.parse(readFileSync(new URL('./bundled-plugins/inventory.json', import.meta.url), 'utf8'))
     for (const bundle of inventory.bundles) assert.ok(result.dsh.profile.bundles.includes(bundle))
     for (const plugin of inventory.plugins) assert.equal(result.dependencies[plugin.name], 'file:../../bundled-plugin-archives/' + plugin.archive)
@@ -36,24 +42,25 @@ test('installation refuses an active desktop profile', () => {
 })
 
 
-test('Codex CLI is installed as a model-provider bundle without mutating existing credentials', () => {
+test('Codex CLI upgrades the legacy model route without mutating existing credentials', () => {
   const home = mkdtempSync(join(tmpdir(), 'pg-codex-installer-'))
   try {
     const profile = join(home, 'profiles', 'desktop')
     mkdirSync(profile, { recursive: true })
     writeFileSync(join(profile, 'package.json'), JSON.stringify({
-      name: 'original', dependencies: { 'keep-me': '1.0.0' },
-      dsh: { profile: { bundles: ['keep-me'] } },
+      name: 'original', dependencies: { 'keep-me': '1.0.0', 'dsh-codex-cli': 'link:../../local-plugins/dsh-codex-cli' },
+      dsh: { profile: { bundles: ['keep-me', 'dsh-codex-cli'] } },
     }))
     writeFileSync(join(home, 'credentials.json'), 'original-auth-untouched')
     install(home)
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(manifest.dependencies['dsh-codex-cli'], 'link:../../local-plugins/dsh-codex-cli')
-    assert.ok(manifest.dsh.profile.bundles.includes('dsh-codex-cli'))
+    assert.ok(!manifest.dsh.profile.bundles.includes('dsh-codex-cli'))
+    assert.ok(manifest.dsh.profile.bundles.includes('dsh-codex-cli-models'))
     assert.equal(manifest.dependencies['keep-me'], '1.0.0')
     assert.equal(readFileSync(join(home, 'credentials.json'), 'utf8'), 'original-auth-untouched')
     const packageInfo = JSON.parse(readFileSync(join(
-      home, 'local-plugins', 'dsh-codex-cli', 'package.json',
+      home, 'local-plugins', 'dsh-codex-cli-models', 'package.json',
     ), 'utf8'))
     assert.equal(packageInfo.dsh.bundle.patch, './cordis.patch.yml')
   } finally { rmSync(home, { recursive: true, force: true }) }
