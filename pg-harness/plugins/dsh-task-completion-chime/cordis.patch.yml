@@ -1,0 +1,6 @@
+- insert:
+    - id: task-completion-chime
+      name: dsh-task-completion-chime
+      config:
+        volume: 0.7
+        playbackTimeoutMs: 5000
