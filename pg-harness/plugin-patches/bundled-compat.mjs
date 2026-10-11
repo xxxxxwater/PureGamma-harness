@@ -5,6 +5,7 @@ const AT_FILE_MARKER = '// PureGamma at-file settings compatibility v3'
 const MAGICPATH_MARKER = '// PureGamma MagicPath tool schema compatibility v2'
 const BILLION_MARKER = '// PureGamma billion-context fetch compatibility v1'
 const AT_FILE_CLIENT_MARKER = '// PureGamma at-file Remote client compatibility v1'
+const SIDEBAR_MARKER = '// PureGamma Better Sidebar connection compatibility v1'
 
 function replaceOnce(source, before, after, plugin) {
   const at = source.indexOf(before)
@@ -132,9 +133,23 @@ const PATCHES = [
   { name: 'dsh-at-file', version: '0.7.0', path: 'lib/client.js', backup: 'dsh-at-file-client.js', patch: patchAtFileClient },
   { name: 'dsh-magicpath', version: '0.1.0', path: 'lib/index.js', backup: 'dsh-magicpath-index.js', patch: patchMagicPath },
   { name: 'billion-context', version: '0.1.190', path: 'dist/agent/dsh-native.js', backup: 'billion-context-dsh-native.js', patch: patchBillionContext },
+  { name: 'dsh-better-sidebar', version: '0.25.0', path: 'lib/index.js', backup: 'dsh-better-sidebar-index.js', patch: patchBetterSidebar },
 ]
 
-/** Apply reversible, idempotent fixes only to the three known bundled versions. */
+/** Restore Sidebar routes after webRuntime was replaced by the Connection service.
+ * Preserve the upstream Host/Origin fence, including its native-shell WebSocket
+ * exception. The pinned alpha.2 Connection implementation holds the same validated
+ * trustedHosts list; using its authenticated HTTP fence here would reject native
+ * WebSockets, which do not pass through the shell's HTTP cookie forwarder.
+ */
+export function patchBetterSidebar(source) {
+  if (source.includes(SIDEBAR_MARKER)) return source
+  source = replaceOnce(source, '\t"webRuntime",', '\t"connection",', 'dsh-better-sidebar')
+  source = replaceOnce(source, 'ctx.webRuntime.trustedHosts', 'ctx.connection.trustedHosts', 'dsh-better-sidebar')
+  return SIDEBAR_MARKER + '\n' + source
+}
+
+/** Apply reversible, idempotent fixes only to the known bundled versions. */
 export function installBundledPluginCompatibility(profile, backup) {
   const changed = []
   for (const spec of PATCHES) {

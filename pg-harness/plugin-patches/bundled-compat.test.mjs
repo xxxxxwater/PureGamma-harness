@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { test } from 'node:test'
 import {
-  patchAtFile, patchAtFileClient, patchMagicPath, patchBillionContext, installBundledPluginCompatibility,
+  patchAtFile, patchAtFileClient, patchMagicPath, patchBillionContext, patchBetterSidebar, installBundledPluginCompatibility,
 } from './bundled-compat.mjs'
 
 function archiveContent(name, path) {
@@ -21,7 +21,27 @@ const cases = [
   { name: 'dsh-at-file', version: '0.7.0', tar: 'dsh-at-file-0.7.0.tgz', path: 'lib/client.js', patch: patchAtFileClient },
   { name: 'dsh-magicpath', version: '0.1.0', tar: 'dsh-magicpath-0.1.0.tgz', path: 'lib/index.js', patch: patchMagicPath },
   { name: 'billion-context', version: '0.1.190', tar: 'billion-context-0.1.190.tgz', path: 'dist/agent/dsh-native.js', patch: patchBillionContext },
+  { name: 'dsh-better-sidebar', version: '0.25.0', tar: 'dsh-better-sidebar-0.25.0.tgz', path: 'lib/index.js', patch: patchBetterSidebar },
 ]
+
+test('Better Sidebar mounts terminal chunks with the current Connection trust list', () => {
+  const fixed = patchBetterSidebar(archiveContent('dsh-better-sidebar-0.25.0.tgz', 'lib/index.js'))
+  const inject = runInNewContext(fixed.match(/const inject = \[[\s\S]*?\];/)[0] + '; inject')
+  assert.ok(inject.includes('connection'))
+  assert.ok(!inject.includes('webRuntime'))
+  const source = fixed.match(/function isTrustedApiRequest\([\s\S]*?\n\}/)[0]
+  const helpers = fixed.slice(fixed.indexOf('function header('), fixed.indexOf(source) + source.length)
+  const fence = runInNewContext(helpers + '; req => isTrustedApiRequest(req, ctx.connection.trustedHosts)', {
+    URL, ctx: { connection: { trustedHosts: ['harness.internal:8080'] } },
+  })
+  assert.ok(source)
+  assert.equal(fence({ headers: { host: '127.0.0.1:49898', origin: 'dsh-app://app' } }), true)
+  assert.equal(fence({ headers: { host: 'harness.internal:8080', origin: 'http://harness.internal:8080' } }), true)
+  assert.equal(fence({ headers: { host: 'evil.example', origin: 'dsh-app://app' } }), false)
+  assert.equal(fence({ headers: { host: '127.0.0.1:49898', origin: 'http://evil.example' } }), false)
+  assert.equal(fence({ headers: { host: '127.0.0.1:49898', 'sec-fetch-site': 'cross-site' } }), false)
+  assert.ok(fixed.includes('registerBundleRoute(ctx, fence)'))
+})
 
 test('patches target shipped plugins, preserve program entry points and remain idempotent', () => {
   const dir = mkdtempSync(join(tmpdir(), 'pg-plugin-syntax-'))
