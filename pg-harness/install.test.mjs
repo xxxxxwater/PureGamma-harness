@@ -34,3 +34,27 @@ test('installation refuses an active desktop profile', () => {
     assert.throws(() => install(home), /Quit Harness/)
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
+
+
+test('Codex CLI is installed as a model-provider bundle without mutating existing credentials', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-codex-installer-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      name: 'original', dependencies: { 'keep-me': '1.0.0' },
+      dsh: { profile: { bundles: ['keep-me'] } },
+    }))
+    writeFileSync(join(home, 'credentials.json'), 'original-auth-untouched')
+    install(home)
+    const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(manifest.dependencies['dsh-codex-cli'], 'link:../../local-plugins/dsh-codex-cli')
+    assert.ok(manifest.dsh.profile.bundles.includes('dsh-codex-cli'))
+    assert.equal(manifest.dependencies['keep-me'], '1.0.0')
+    assert.equal(readFileSync(join(home, 'credentials.json'), 'utf8'), 'original-auth-untouched')
+    const packageInfo = JSON.parse(readFileSync(join(
+      home, 'local-plugins', 'dsh-codex-cli', 'package.json',
+    ), 'utf8'))
+    assert.equal(packageInfo.dsh.bundle.patch, './cordis.patch.yml')
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})

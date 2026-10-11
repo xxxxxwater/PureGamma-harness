@@ -33,7 +33,7 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
   manifest.dsh ??= {}
   manifest.dsh.profile ??= {}
   manifest.dsh.profile.bundles ??= ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
-  for (const name of ['dsh-plugin-rail', 'dsh-vscode-code-theme', 'dsh-imessage-blue', 'dsh-pixel-font']) {
+  for (const name of ['dsh-plugin-rail', 'dsh-vscode-code-theme', 'dsh-imessage-blue', 'dsh-pixel-font', 'dsh-codex-cli']) {
     const destination = join(home, 'local-plugins', name)
     if (existsSync(destination)) cpSync(destination, join(backup, name), { recursive: true })
     cpSync(join(source, name), destination, { recursive: true })
