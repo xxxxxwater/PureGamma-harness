@@ -22,7 +22,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Validate three bundled plugin compatibility fixes
+      - name: Validate bundled plugin compatibility fixes
         run: node --test pg-harness/plugin-patches/bundled-compat.test.mjs
       - name: Existing installer regression
         run: node --test pg-harness/install.test.mjs
+      - name: Validate completion notifications
+        run: node --test pg-harness/plugins/dsh-task-completion-chime/plugin.test.mjs

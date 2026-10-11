@@ -4,12 +4,14 @@ on:
     branches: [master]
     paths:
       - 'pg-harness/plugins/dsh-codex-cli/**'
+      - 'pg-harness/plugins/dsh-codex-cli-models/**'
       - 'pg-harness/install.mjs'
       - 'pg-harness/install.test.mjs'
       - '.github/workflows/puregamma-codex-cli.yml'
   pull_request:
     paths:
       - 'pg-harness/plugins/dsh-codex-cli/**'
+      - 'pg-harness/plugins/dsh-codex-cli-models/**'
       - 'pg-harness/install.mjs'
       - 'pg-harness/install.test.mjs'
 permissions:
@@ -25,6 +27,8 @@ jobs:
       - name: Parse ESM and check executable contract
         run: |
           node --check pg-harness/plugins/dsh-codex-cli/index.js
+          node --check pg-harness/plugins/dsh-codex-cli-models/index.js
+          node --check pg-harness/plugins/dsh-codex-cli-models/client.js
           node --check pg-harness/install.mjs
       - name: Test Codex provider and PureGamma installer with mock CLI
-        run: node --test pg-harness/plugins/dsh-codex-cli/index.test.mjs pg-harness/install.test.mjs
+        run: node --test pg-harness/plugins/dsh-codex-cli/index.test.mjs pg-harness/plugins/dsh-codex-cli-models/plugin.test.mjs pg-harness/install.test.mjs
