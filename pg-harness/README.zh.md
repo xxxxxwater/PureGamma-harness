@@ -27,6 +27,7 @@
 
 | 插件 | 能力与配置 |
 | --- | --- |
+| [`dsh-evidence-trust`](plugins/dsh-evidence-trust/README.md) | 基于会话的哈希链 Evidence Ledger、Unknown Registry 和可选择启用的强制 Verification Gate；默认仅审计，不存储原始工具输出。 |
 | [`dsh-codex-cli-models`](plugins/dsh-codex-cli-models/README.zh.md) | 使用本机 Codex 登录调用模型，支持 Harness 历史和工具；在设置 → Codex CLI 中登录。 |
 | [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.zh.md) | macOS 上每次主会话任务正常完成后播放一次提示音。 |
 | `dsh-context` | 查看上下文构成及其变化。 |

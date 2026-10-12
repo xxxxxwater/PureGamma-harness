@@ -27,6 +27,7 @@ The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin ar
 
 | Package | Capability and setup |
 | --- | --- |
+| [`dsh-evidence-trust`](plugins/dsh-evidence-trust/README.md) | Session-scoped hash-chained tool Evidence Ledger, Unknown Registry, and an opt-in fail-closed Verification Gate. Audit-only by default; never stores raw tool outputs. |
 | [`dsh-codex-cli-models`](plugins/dsh-codex-cli-models/README.md) | Use locally authenticated Codex models with Harness history and tools; sign in through Settings → Codex CLI. |
 | [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.md) | Play one chime per successful top-level turn on macOS. |
 | `dsh-context` | Inspect how the context is composed and how it changes. |
