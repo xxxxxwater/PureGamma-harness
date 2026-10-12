@@ -24,10 +24,10 @@ const event = (agent, name, failed = false) => ({
   exec: { agent, name, callId: name, arguments: { token:'SECRET_IN_ARGS' } },
   result: { isError: failed, content: [{ type:'text', text:'SECRET_IN_RESULT' }] },
 })
-const fields = ['repository','commit_sha','artifact_sha256','run_id']
+const fields = ['repository','commit_sha','artifact_sha256','run_id','workflow']
 const release = {
   repository:'xxxxxwater/PureGamma-harness', commit_sha:'c'.repeat(40),
-  artifact_sha256:'d'.repeat(64), run_id:'98765',
+  artifact_sha256:'d'.repeat(64), run_id:'98765', workflow:'Trusted Build',
 }
 const keys = generateKeyPairSync('ed25519')
 const publicKeyPem = keys.publicKey.export({ format:'pem', type:'spki' })
