@@ -1,0 +1,10 @@
+# Audit-only by default. Explicitly supply a verifier with an independent,
+# controlled validation contract before enabling enforce in profile patches.
+- insert:
+    - id: evidence-trust
+      name: dsh-evidence-trust
+      config:
+        mode: audit
+        protectedTools: []
+        verifierTools: []
+        mutationTools: []

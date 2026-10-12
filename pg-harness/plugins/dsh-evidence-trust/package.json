@@ -1,0 +1,26 @@
+{
+  "name": "dsh-evidence-trust",
+  "version": "0.1.0",
+  "description": "PureGamma Harness evidence ledger, unresolved question registry and fail-closed verification gate",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "ledger.mjs",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
