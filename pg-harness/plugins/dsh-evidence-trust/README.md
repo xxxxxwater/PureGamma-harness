@@ -5,7 +5,7 @@ A Cordis plugin for the PureGamma Harness desktop profile. It adds a session-sco
 ## What it actually guarantees
 
 - Observes final `tools/result` outcomes (including errors and policy denials) in the executing Agent session. Stores the tool name, success/failure, argument/result **SHA-256 hashes**, hashed call identity, monotonic sequence, and a chained ledger digest. **No raw tool arguments, outputs, API keys, or tokens** are persisted by the ledger.
-- Stores explicit unresolved questions linked to a prior recorded evidence ID. Resolution needs a later successful observation from a configured verifier tool, and is itself appended to the chain. A successful tool result is **not** proof that a business outcome is correct.
+- Stores explicit unresolved questions linked to a prior recorded evidence ID. Resolution needs a later successful observation from a configured verifier tool, and is itself appended to the chain. Reconfiguring verifier policy invalidates outdated resolutions until new verification evidence is recorded. A successful tool result is **not** proof that a business outcome is correct.
 - Mounts `ctx.tools.guard()`, a monotonic last-mile denial after `tools/pre-execute`. In `enforce` mode, protected tools fail closed if the ledger is corrupt/unavailable, any unknown remains open, or configured verification observations are missing/stale.
 - Evidence data lives under `$DSH_HOME/pg-trust-ledgers/<SHA256(session-id)>.jsonl` (default `~/.dsh`). Files are created private; no stored credential data is intentional. An unexpected disk write error makes the in-memory ledger unhealthy; corruption blocks protected operations.
 
@@ -36,7 +36,7 @@ The installer sets **audit** with empty patterns; it never changes existing tool
       mutationTools: ['your_code_edit_tool']
 ```
 
-Replace all placeholder names with **actual registered tool names**. Every verifier pattern must be backed by a trusted, read-only validator (e.g. a CI status reader with pinned run/artifact identity). Generic shell commands, LLM summaries, and self-reported PASS strings are **not trusted verifiers**. The gate requires at least one successful observation for **each** verifier pattern after the last successful mutation-tool observation, with no unresolved unknowns. Configuration with `mode: enforce` but without protected and verifier lists fails at plugin initialization.
+Replace all placeholder names with **actual registered tool names**. Every verifier pattern must be backed by a trusted, read-only validator (e.g. a CI status reader with pinned run/artifact identity). Generic shell commands, LLM summaries, and self-reported PASS strings are **not trusted verifiers**. The gate requires at least one successful observation for **each** verifier pattern after the last mutation-tool observation (including failed attempts, which may have left partial side effects), with no unresolved unknowns. Configuration with `mode: enforce` but without protected and verifier lists fails at plugin initialization.
 
 **Important boundary:** this is a tool-name/session-scoped gate, not an OS sandbox or a proof that one specific commit passed CI. Other tools that can deploy, write, or execute must be independently sandboxed or explicitly protected. For production releases, add artifact SHA and external CI signature checks before treating the gate as a security control.
 

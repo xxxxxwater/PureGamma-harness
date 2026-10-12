@@ -64,11 +64,12 @@ export class TrustLedger {
       this.observations.set(event.digest, { ...p, seq: event.seq })
     } else if (p?.kind === 'unknown-open') {
       if (!this.observations.has(p.source) || this.unknowns.has(p.id) || typeof p.question !== 'string' || !p.question) throw new Error('bad unknown')
-      this.unknowns.set(p.id, { ...p, seq: event.seq, resolvedBy: null })
+      this.unknowns.set(p.id, { ...p, seq: event.seq, resolvedBy: null, resolvedSeq: 0 })
     } else if (p?.kind === 'unknown-resolve') {
       const u = this.unknowns.get(p.id), proof = this.observations.get(p.proof)
-      if (!u || u.resolvedBy || !proof || proof.failed || proof.seq <= u.seq) throw new Error('bad resolution')
+      if (!u || !proof || proof.failed || proof.seq <= Math.max(u.seq, u.resolvedSeq)) throw new Error('bad resolution')
       u.resolvedBy = p.proof
+      u.resolvedSeq = event.seq
     } else throw new Error('invalid ledger event')
   }
   replay(e) {
@@ -120,15 +121,22 @@ export class TrustLedger {
   }
   resolveUnknown(id, proofId, policy) {
     const u = this.unknowns.get(id), proof = this.observations.get(proofId)
-    if (!u || u.resolvedBy) throw new Error('unknown missing or already resolved')
-    if (!proof || proof.failed || proof.seq <= u.seq || !any(policy.verifiers, proof.tool)) throw new Error('later successful verifier evidence required')
+    if (!u) throw new Error('unknown missing')
+    if (!proof || proof.failed || proof.seq <= Math.max(u.seq, u.resolvedSeq) || !any(policy.verifiers, proof.tool)) throw new Error('later successful verifier evidence required')
     this.append({ kind: 'unknown-resolve', id, proof: proofId })
   }
   evaluate(tool, policy) {
     if (!any(policy.protected, tool)) return { allowed: true, reason: 'not-protected' }
     if (this.broken) return { allowed: false, reason: 'ledger-corrupt-or-unavailable' }
     if ([...this.unknowns.values()].some(u => !u.resolvedBy)) return { allowed: false, reason: 'open-unknowns' }
-    const mutationSeq = Math.max(0, ...[...this.observations.values()].filter(v => !v.failed && any(policy.mutations, v.tool)).map(v => v.seq))
+    // A policy change may invalidate an old resolution; it must be reverified.
+    if ([...this.unknowns.values()].some(u => {
+      const proof = this.observations.get(u.resolvedBy)
+      return !proof || proof.failed || !any(policy.verifiers, proof.tool)
+    })) return { allowed: false, reason: 'unknown-resolution-needs-reverification' }
+    // A failing/cancelled mutation may have left side effects. Invalidate
+    // prior proofs after ANY mutation attempt, not just successful results.
+    const mutationSeq = Math.max(0, ...[...this.observations.values()].filter(v => any(policy.mutations, v.tool)).map(v => v.seq))
     for (const verifier of policy.verifiers) {
       if (![...this.observations.values()].some(v => !v.failed && v.seq > mutationSeq && verifier.test(v.tool))) {
         return { allowed: false, reason: 'missing-or-stale-verification' }

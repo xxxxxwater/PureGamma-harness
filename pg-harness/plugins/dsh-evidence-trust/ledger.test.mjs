@@ -50,6 +50,11 @@ test('gate fails until verifier runs after last mutation; unknowns require later
   assert.equal(l.evaluate('publish_release', policy).allowed, true)
   l.observe(ok('edit_second').exec, ok('edit_second').result)
   assert.equal(l.evaluate('publish_release', policy).reason, 'missing-or-stale-verification')
+  // A failed write may still partially mutate a file: it must also stale proof.
+  l.observe(ok('ci_verify').exec, ok('ci_verify').result)
+  assert.equal(l.evaluate('publish_release', policy).allowed, true)
+  l.observe(ok('edit_failed').exec, { isError: true, content: [{ type: 'text', text: 'failed' }] })
+  assert.equal(l.evaluate('publish_release', policy).reason, 'missing-or-stale-verification')
   assert.equal(l.evaluate('list_files', policy).allowed, true)
 }))
 test('corrupt, truncated or mismatched ledger blocks a protected tool after restart', () => withLedger((l, root) => {
@@ -60,4 +65,16 @@ test('corrupt, truncated or mismatched ledger blocks a protected tool after rest
   assert.equal(loaded.status(policy).integrity, 'unavailable')
   assert.equal(loaded.evaluate('publish_release', policy).allowed, false)
   assert.throws(() => loaded.observe(s.exec, s.result), /unavailable/)
+}))
+
+test('reconfiguring verifier invalidates an old unknown resolution until reverified', () => withLedger(l => {
+  const src = l.observe(ok('edit_file').exec, ok('edit_file').result)
+  const unknownId = l.openUnknown(src, 'Was rollback verified?')
+  const proof = l.observe(ok('ci_verify').exec, ok('ci_verify').result)
+  l.resolveUnknown(unknownId, proof, policy)
+  const newer = policyOf({ mode: 'enforce', protectedTools: ['publish_*'], verifierTools: ['ci_verify_new'] })
+  assert.equal(l.evaluate('publish_release', newer).reason, 'unknown-resolution-needs-reverification')
+  const updated = l.observe(ok('ci_verify_new').exec, ok('ci_verify_new').result)
+  l.resolveUnknown(unknownId, updated, newer)
+  assert.equal(l.evaluate('publish_release', newer).allowed, true)
 }))
