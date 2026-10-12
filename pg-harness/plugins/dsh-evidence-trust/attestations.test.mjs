@@ -77,6 +77,7 @@ test('release requires valid Ed25519 CI signature with exact commit/artifact/run
     assert.equal(gate.decide(invoke('publish_release', { ...release, [key]: 'not-matching' }), ledger).allowed, false, key)
   }
   assert.equal(gate.decide(invoke('publish_release', { ...release, workflow: 'another' }), ledger).allowed, false)
+  assert.equal(gate.decide(invoke('publish_release', { ...release, force: true }), ledger).reason, 'unbound-tool-arguments')
   assert.equal(gate.decide(invoke('unclassified_deploy', release), ledger).reason, 'unclassified-or-ambiguous-protected-tool')
   const tampered = { ...envelope, payload: { ...envelope.payload, commit_sha: 'c'.repeat(40) } }
   assert.throws(() => vault.import(tampered), /signature-failed/)
@@ -128,7 +129,10 @@ test('cross-session links are historical; only signed resolution matches gated p
     { isError:false, content:[] })
   const old = policyOf({ mode:'audit', verifierTools:['ci_verify'] })
   ledger.resolveUnknown(unknown, legacy, old)
-  vault.import(signEnvelope(releasePayload(),priv,'ci-v1'))
+  const minted = { ...releasePayload(),
+    issued_at: new Date(Date.now() + 1000).toISOString(),
+    expires_at: new Date(Date.now() + 60000).toISOString() }
+  vault.import(signEnvelope(minted,priv,'ci-v1'))
   assert.equal(gate.decide(invoke('publish_release', release), ledger).reason, 'open-or-stale-signed-unknowns')
   const proof = vault.list()[0]
   ledger.resolveUnknownSigned(unknown, proof)

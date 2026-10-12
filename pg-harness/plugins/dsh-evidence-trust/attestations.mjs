@@ -65,7 +65,34 @@ function pathValue(input, key) {
 function requiredMapping(keys, fields) {
   if (!keys || !exactKeys(keys, fields)) throw new TypeError('missing-or-extra-binding-path')
   for (const key of fields) pathValue({}, keys[key])
+  const pathList = Object.values(keys)
+  if (new Set(pathList).size !== fields.length ||
+    pathList.some(a => pathList.some(b => a !== b && b.startsWith(a + '.')))) {
+    throw new TypeError('overlapping-or-duplicate-binding-path')
+  }
   return Object.freeze({ ...keys })
+}
+/** Refuse extra tool arguments not covered by the exact signed binding shape. */
+function requireExactBindingShape(args, paths) {
+  const shape = Object.create(null)
+  for (const dotted of Object.values(paths)) {
+    const pieces = dotted.split('.')
+    let node = shape
+    for (const piece of pieces) {
+      if (['__proto__','constructor','prototype'].includes(piece)) throw new Error('unsafe-binding-path')
+      node[piece] ??= Object.create(null)
+      node = node[piece]
+    }
+  }
+  const examine = (value, expected) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).length !== Object.keys(expected).length) throw new Error('unbound-tool-arguments')
+    for (const key of Object.keys(value)) {
+      if (!Object.hasOwn(expected, key)) throw new Error('unbound-tool-arguments')
+      if (Object.keys(expected[key]).length) examine(value[key], expected[key])
+    }
+  }
+  examine(args, shape)
 }
 export const RELEASE_FIELDS = ['repository','commit_sha','artifact_sha256','run_id']
 export const TRADE_FIELDS = [
@@ -114,12 +141,14 @@ export function configureAttestations(config = {}, mode = 'audit') {
 }
 
 export function releaseTarget(args, policy) {
+  requireExactBindingShape(args, policy.paths)
   const values = Object.fromEntries(RELEASE_FIELDS.map(k => [k, pathValue(args, policy.paths[k])]))
   if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(values.repository) || values.repository !== policy.repository) throw new Error('release-repository-mismatch')
   if (!COMMIT.test(values.commit_sha) || !HEX64.test(values.artifact_sha256)) throw new Error('release-digest-invalid')
   return { ...values, run_id: runId(values.run_id), workflow: policy.workflow }
 }
 export function tradeTarget(args, policy) {
+  requireExactBindingShape(args, policy.paths)
   const values = Object.fromEntries(TRADE_FIELDS.map(k => [k, pathValue(args, policy.paths[k])]))
   for (const k of ['venue','account','symbol','side','client_order_id']) text(values[k])
   if (!policy.allowedVenues.has(values.venue) || !policy.allowedAccounts.has(values.account)) throw new Error('trade-account-or-venue-not-allowed')

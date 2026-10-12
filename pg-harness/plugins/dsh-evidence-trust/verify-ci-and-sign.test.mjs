@@ -30,7 +30,7 @@ test('CI producer reads immutable GitHub run and artifact digest instead of trus
     run_id:proof.run_id, workflow:proof.workflow, conclusion:proof.conclusion,
   }, { kind:'release', commit_sha:'a'.repeat(40), artifact_sha256:'b'.repeat(64),
     run_id:runId, workflow:'Verified Production Build', conclusion:'success' })
-  assert.equal(proof.expires_at, '2026-10-13T01:00:00.000Z')
+  assert.equal(proof.expires_at, '2026-10-13T00:15:00.000Z')
 })
 test('rejects failed, foreign, mismatched or PR-triggered runs', async () => {
   for (const change of [

@@ -50,7 +50,7 @@ export async function inspectSuccessfulRun({
     kind: 'release', repository, commit_sha: run.head_sha,
     artifact_sha256: artifactSha, run_id: String(runId), workflow: run.name,
     conclusion: 'success', issued_at: new Date(now).toISOString(),
-    expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+    expires_at: new Date(now + 15 * 60 * 1000).toISOString(),
   }
 }
 
