@@ -33,7 +33,8 @@ export function policyOf(config = {}) {
   const mutationTools = config.mutationTools ?? []
   if (!['audit', 'enforce'].includes(mode)) throw new TypeError('invalid trust mode')
   if (![protectedTools, verifierTools, mutationTools].every(xs => Array.isArray(xs) && xs.every(x => typeof x === 'string'))) throw new TypeError('invalid tool patterns')
-  if (mode === 'enforce' && (!protectedTools.length || !verifierTools.length)) throw new TypeError('enforce requires protectedTools and verifierTools')
+  const signedRules = Boolean(config.attestations?.release?.tools?.length || config.attestations?.trade?.tools?.length)
+  if (mode === 'enforce' && !signedRules && (!protectedTools.length || !verifierTools.length)) throw new TypeError('enforce requires signed tool rules or legacy protectedTools and verifierTools')
   if ([...protectedTools, ...verifierTools].some(x => x.startsWith('pg_trust_'))) throw new TypeError('trust management tools cannot satisfy or bypass policy')
   return { mode, protectedTools, verifierTools, mutationTools,
     protected: protectedTools.map(glob), verifiers: verifierTools.map(glob), mutations: mutationTools.map(glob) }
@@ -43,10 +44,12 @@ export class TrustLedger {
     if (typeof sessionId !== 'string' || !sessionId) throw new TypeError('session id required')
     mkdirSync(root, { recursive: true, mode: 0o700 })
     if (lstatSync(root).isSymbolicLink()) throw new Error('unsafe trust root')
+    this.root = root
     this.path = join(root, sha(sessionId) + '.jsonl')
     this.events = []
     this.observations = new Map()
     this.unknowns = new Map()
+    this.links = new Map()
     this.broken = null
     if (existsSync(this.path)) {
       try {
@@ -64,11 +67,26 @@ export class TrustLedger {
       this.observations.set(event.digest, { ...p, seq: event.seq })
     } else if (p?.kind === 'unknown-open') {
       if (!this.observations.has(p.source) || this.unknowns.has(p.id) || typeof p.question !== 'string' || !p.question) throw new Error('bad unknown')
-      this.unknowns.set(p.id, { ...p, seq: event.seq, resolvedBy: null, resolvedSeq: 0 })
+      this.unknowns.set(p.id, { ...p, seq: event.seq, resolvedBy: null, resolvedSigned: null, resolvedSeq: 0 })
+    } else if (p?.kind === 'unknown-resolve-signed') {
+      const u = this.unknowns.get(p.id)
+      if (!u || typeof p.proof !== 'string' || !/^[0-9a-f]{64}$/.test(p.proof) ||
+        u.resolvedSeq >= event.seq || event.seq <= u.seq) throw new Error('invalid signed unknown resolution')
+      u.resolvedBy = p.proof
+      u.resolvedSigned = p.proof
+      u.resolvedSeq = event.seq
+    } else if (p?.kind === 'evidence-link') {
+      if (typeof p.source_session_hash !== 'string' || !/^[0-9a-f]{64}$/.test(p.source_session_hash) ||
+        typeof p.source_evidence_id !== 'string' || !/^[0-9a-f]{64}$/.test(p.source_evidence_id) ||
+        typeof p.source_head !== 'string' || !/^[0-9a-f]{64}$/.test(p.source_head)) {
+        throw new Error('invalid external evidence link')
+      }
+      this.links.set(event.digest, { ...p, seq: event.seq })
     } else if (p?.kind === 'unknown-resolve') {
       const u = this.unknowns.get(p.id), proof = this.observations.get(p.proof)
       if (!u || !proof || proof.failed || proof.seq <= Math.max(u.seq, u.resolvedSeq)) throw new Error('bad resolution')
       u.resolvedBy = p.proof
+      u.resolvedSigned = null
       u.resolvedSeq = event.seq
     } else throw new Error('invalid ledger event')
   }
@@ -88,6 +106,7 @@ export class TrustLedger {
     const probe = Object.create(TrustLedger.prototype)
     probe.observations = new Map(this.observations)
     probe.unknowns = new Map([...this.unknowns].map(([k,v]) => [k,{ ...v }]))
+    probe.links = new Map(this.links)
     probe.apply(e)
     const bytes = Buffer.from(JSON.stringify(e) + '\n')
     try {
@@ -111,6 +130,22 @@ export class TrustLedger {
       arguments_hash: digest(exec.arguments ?? null), result_hash: digest(result),
       call_hash: digest(String(exec.callId ?? 'unknown')) })
   }
+  /** Anchor another session's validated evidence by digest, not a copy of tool output.
+   * An external link is a historical reference, never a verification credential.
+   */
+  linkEvidence(sessionId, evidenceId) {
+    if (this.broken) throw new Error('trust ledger unavailable')
+    if (typeof sessionId !== 'string' || !sessionId || typeof evidenceId !== 'string') throw new TypeError('invalid evidence link')
+    const other = new TrustLedger(this.root, sessionId)
+    if (other.broken) throw new Error('source ledger integrity failure')
+    if (!other.observations.has(evidenceId)) throw new Error('source evidence does not exist')
+    const head = other.events.at(-1)?.digest
+    if (!head) throw new Error('source ledger empty')
+    return this.append({
+      kind: 'evidence-link', source_session_hash: sha(sessionId),
+      source_evidence_id: evidenceId, source_head: head,
+    })
+  }
   openUnknown(source, question) {
     if (!this.observations.has(source)) throw new Error('source must be existing evidence')
     if (typeof question !== 'string' || !question.trim() || question.length > 240) throw new TypeError('invalid question')
@@ -124,6 +159,16 @@ export class TrustLedger {
     if (!u) throw new Error('unknown missing')
     if (!proof || proof.failed || proof.seq <= Math.max(u.seq, u.resolvedSeq) || !any(policy.verifiers, proof.tool)) throw new Error('later successful verifier evidence required')
     this.append({ kind: 'unknown-resolve', id, proof: proofId })
+  }
+  /** Signed resolutions remain bound to this exact, still-valid attestation. */
+  resolveUnknownSigned(id, verifiedProof) {
+    const u = this.unknowns.get(id)
+    if (!u) throw new Error('unknown missing')
+    if (!verifiedProof || typeof verifiedProof.id !== 'string' ||
+      Date.parse(verifiedProof.payload.issued_at) <= Date.parse(this.events[u.seq - 1].time)) {
+      throw new Error('a newly issued signed attestation is required')
+    }
+    this.append({ kind: 'unknown-resolve-signed', id, proof: verifiedProof.id })
   }
   evaluate(tool, policy) {
     if (!any(policy.protected, tool)) return { allowed: true, reason: 'not-protected' }
@@ -146,9 +191,10 @@ export class TrustLedger {
   }
   status(policy) {
     return { mode: policy.mode, integrity: this.broken ? 'unavailable' : 'ok',
-      records: this.events.length, observations: this.observations.size,
+      records: this.events.length, observations: this.observations.size, linked_evidence: this.links.size,
       open_unknowns: [...this.unknowns.values()].filter(u => !u.resolvedBy).map(u => ({ id: u.id, question: u.question, source: u.source })),
       evidence: [...this.observations].slice(-20).map(([id,v]) => ({ id, tool: v.tool, failed: v.failed, seq: v.seq })),
+      evidence_links: [...this.links].slice(-20).map(([id,p]) => ({ id, ...p })),
       protected_tools: policy.protectedTools, verifier_tools: policy.verifierTools }
   }
 }

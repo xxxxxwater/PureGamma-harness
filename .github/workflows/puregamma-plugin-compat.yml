@@ -32,4 +32,8 @@ jobs:
         run: |
           node --check pg-harness/plugins/dsh-evidence-trust/index.js
           node --check pg-harness/plugins/dsh-evidence-trust/ledger.mjs
-          node --test pg-harness/plugins/dsh-evidence-trust/ledger.test.mjs pg-harness/plugins/dsh-evidence-trust/index.test.mjs
+          node --check pg-harness/plugins/dsh-evidence-trust/attestations.mjs
+          node --check pg-harness/plugins/dsh-evidence-trust/signed-gate.mjs
+          node --check pg-harness/plugins/dsh-evidence-trust/sign-attestation.mjs
+          node --check pg-harness/plugins/dsh-evidence-trust/verify-ci-and-sign.mjs
+          node --test pg-harness/plugins/dsh-evidence-trust/*.test.mjs

@@ -1,0 +1,59 @@
+name: PureGamma signed CI attestation
+
+# Signs verified master CI runs only. No signing keys are committed here.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful target CI run ID
+        type: string
+        required: true
+      artifact_name:
+        description: Exact uploaded Actions artifact name
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Configure environment reviewers and PEM secret separately.
+    environment: puregamma-trust-signing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify designated CI run and sign archive digest
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PG_TRUST_CI_RUN_ID: ${{ inputs.run_id }}
+          PG_TRUST_CI_ARTIFACT_NAME: ${{ inputs.artifact_name }}
+          PG_TRUST_CI_WORKFLOW_ID: ${{ vars.PG_TRUST_CI_WORKFLOW_ID }}
+          PG_TRUST_CI_KEY_ID: ${{ vars.PG_TRUST_CI_KEY_ID }}
+          PG_TRUST_CI_PRIVATE_KEY: ${{ secrets.PG_TRUST_CI_PRIVATE_KEY_PEM }}
+          PG_TRUST_PROOF_OUTPUT: ${{ runner.temp }}/attestation.json
+          PG_TRUST_CI_KEY_FILE: ${{ runner.temp }}/signer.pem
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_REF" = "refs/heads/master"
+          test -n "$PG_TRUST_CI_PRIVATE_KEY"
+          test -n "$PG_TRUST_CI_KEY_ID"
+          test -n "$PG_TRUST_CI_WORKFLOW_ID"
+          printf '%s' "$PG_TRUST_CI_PRIVATE_KEY" > "$PG_TRUST_CI_KEY_FILE"
+          trap 'rm -f "$PG_TRUST_CI_KEY_FILE"' EXIT
+          node pg-harness/plugins/dsh-evidence-trust/verify-ci-and-sign.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: puregamma-signed-attestation
+          path: ${{ runner.temp }}/attestation.json
+          if-no-files-found: error
+          retention-days: 30

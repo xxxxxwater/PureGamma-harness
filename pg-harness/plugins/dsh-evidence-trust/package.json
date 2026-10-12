@@ -1,7 +1,7 @@
 {
   "name": "dsh-evidence-trust",
-  "version": "0.1.0",
-  "description": "PureGamma Harness evidence ledger, unresolved question registry and fail-closed verification gate",
+  "version": "0.2.0",
+  "description": "Signed CI/trading Verification Gate with content-addressed cross-session Evidence Ledger and Unknown Registry",
   "type": "module",
   "main": "./index.js",
   "exports": {
@@ -11,6 +11,10 @@
   "files": [
     "index.js",
     "ledger.mjs",
+    "attestations.mjs",
+    "signed-gate.mjs",
+    "sign-attestation.mjs",
+    "verify-ci-and-sign.mjs",
     "cordis.patch.yml",
     "README.md"
   ],
