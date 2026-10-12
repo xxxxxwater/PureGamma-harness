@@ -28,3 +28,8 @@ jobs:
         run: node --test pg-harness/install.test.mjs
       - name: Validate completion notifications
         run: node --test pg-harness/plugins/dsh-task-completion-chime/plugin.test.mjs
+      - name: Validate PureGamma evidence ledger and verification gate
+        run: |
+          node --check pg-harness/plugins/dsh-evidence-trust/index.js
+          node --check pg-harness/plugins/dsh-evidence-trust/ledger.mjs
+          node --test pg-harness/plugins/dsh-evidence-trust/ledger.test.mjs pg-harness/plugins/dsh-evidence-trust/index.test.mjs
