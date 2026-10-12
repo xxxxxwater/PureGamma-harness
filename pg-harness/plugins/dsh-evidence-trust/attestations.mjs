@@ -94,7 +94,7 @@ function requireExactBindingShape(args, paths) {
   }
   examine(args, shape)
 }
-export const RELEASE_FIELDS = ['repository','commit_sha','artifact_sha256','run_id']
+export const RELEASE_FIELDS = ['repository','commit_sha','artifact_sha256','run_id','workflow']
 export const TRADE_FIELDS = [
   'venue', 'account', 'symbol', 'side', 'quantity', 'price',
   'notional_usd', 'leverage', 'reduce_only', 'client_order_id',
@@ -143,9 +143,9 @@ export function configureAttestations(config = {}, mode = 'audit') {
 export function releaseTarget(args, policy) {
   requireExactBindingShape(args, policy.paths)
   const values = Object.fromEntries(RELEASE_FIELDS.map(k => [k, pathValue(args, policy.paths[k])]))
-  if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(values.repository) || values.repository !== policy.repository) throw new Error('release-repository-mismatch')
+  if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(values.repository) || values.repository !== policy.repository || values.workflow !== policy.workflow) throw new Error('release-repository-or-workflow-mismatch')
   if (!COMMIT.test(values.commit_sha) || !HEX64.test(values.artifact_sha256)) throw new Error('release-digest-invalid')
-  return { ...values, run_id: runId(values.run_id), workflow: policy.workflow }
+  return { ...values, run_id: runId(values.run_id) }
 }
 export function tradeTarget(args, policy) {
   requireExactBindingShape(args, policy.paths)

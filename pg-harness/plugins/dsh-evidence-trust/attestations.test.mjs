@@ -14,7 +14,7 @@ const pub = keys.publicKey.export({ type: 'spki', format: 'pem' })
 const priv = keys.privateKey.export({ type: 'pkcs8', format: 'pem' })
 const stamp = (now, diff) => new Date(now + diff).toISOString()
 const paths = names => Object.fromEntries(names.map(name => [name, name]))
-const RELEASE_PATHS = paths(['repository','commit_sha','artifact_sha256','run_id'])
+const RELEASE_PATHS = paths(['repository','commit_sha','artifact_sha256','run_id','workflow'])
 const TRADE_PATHS = paths(['venue','account','symbol','side','quantity','price','notional_usd','leverage','reduce_only','client_order_id'])
 const POLICY = {
   mode: 'enforce',

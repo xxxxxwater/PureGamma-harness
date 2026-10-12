@@ -30,8 +30,16 @@ export async function apply(ctx, config = {}) {
   // actual arguments or outputs. I/O failure makes the ledger unhealthy.
   ctx.on('tools/result', (exec, result) => {
     if (!exec.agent || exec.name.startsWith('pg_trust_')) return
-    try { ledgerFor(exec.agent).observe(exec, result) }
-    catch { /* On enforcement the next protected operation fails closed. */ }
+    let ledger
+    try {
+      ledger = ledgerFor(exec.agent)
+      ledger.observe(exec, result)
+    } catch {
+      // A bad result serialization or recording failure cannot silently
+      // preserve an older verification state for later protected calls.
+      if (ledger) ledger.broken = 'evidence-recording-failed'
+      // If construction itself failed, the next guard lookup also fails.
+    }
   })
   // The guard runs after pre-execute policy: an ordinary listener cannot allow
   // a denied operation. Trade reservation is atomic and is never refunded.

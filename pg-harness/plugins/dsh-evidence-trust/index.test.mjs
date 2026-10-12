@@ -100,3 +100,29 @@ test('unsafe legacy-only enforce configuration fails closed at plugin startup', 
     mode:'enforce', protectedTools:['publish_*'], verifierTools:['ci_check'],
   }), /trusted Ed25519/)
 })
+
+test('recording failure poisons session for a previously valid signed release', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pg-index-'))
+  try {
+    const h = harness()
+    await apply(h.ctx, { root, mode:'enforce', attestations:{
+      trustedKeys:[{ id:'ci', publicKeyPem, kinds:['release'] }],
+      release: { tools:['publish_release'], repository:release.repository,
+        workflow:'Trusted Build', paths:Object.fromEntries(fields.map(x=>[x,x])),
+        maxAgeSeconds:600 },
+    } })
+    const agent = { session:{ id:'failed-recording' } }
+    const envelope = signEnvelope({
+      kind:'release', ...release, conclusion:'success',
+      issued_at:new Date(Date.now()-1000).toISOString(),
+      expires_at:new Date(Date.now()+50000).toISOString(),
+    }, privateKeyPem, 'ci')
+    await h.tools.get('pg_trust_import_attestation').execute({ envelope }, { agent })
+    assert.equal(h.guard()({ name:'publish_release', arguments:release, agent }), undefined)
+    // A malformed output would normally be rejected by ToolRuntime; this
+    // exercises the observer's own last-resort error containment.
+    h.events.get('tools/result')({ agent, name:'some_tool', arguments:{}, callId:'1' },
+      { isError:false, value:1n, content:[] })
+    assert.match(h.guard()({ name:'publish_release', arguments:release, agent }), /ledger-corrupt/)
+  } finally { rmSync(root, { recursive:true, force:true }) }
+})

@@ -60,6 +60,7 @@ Install with the PureGamma installer. The bundled patch remains Audit by default
             commit_sha: commit_sha
             artifact_sha256: artifact_sha256
             run_id: run_id
+            workflow: workflow
 ~~~
 
 Separate paper-trading example (merge under the SAME attestations object for both rules):
