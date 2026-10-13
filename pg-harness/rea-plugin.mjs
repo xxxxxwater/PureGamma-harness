@@ -5,10 +5,11 @@
  * distinct Harness operations. This is an explicit installer opt-in, not a
  * background plugin-manager mutation. Never touch pnpm allowBuilds.
  */
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { constants, copyFileSync, existsSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { randomBytes } from 'node:crypto'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const REA_BUNDLE = 'dsh-rea-bundle'
@@ -134,6 +135,61 @@ export function inspectReaBundle(home = process.env.DSH_HOME || join(homedir(), 
   }
 }
 
+/**
+ * Opt-in local-only repair for a successfully installed but disabled bundle.
+ * The PureGamma installer is intentionally not invoked: do not reinstall any
+ * third-party dependencies or write pnpm lockfiles / build allowlists here.
+ * Fully quit the Desktop app before invoking this command.
+ */
+export function activateInstalledReaBundle(home = process.env.DSH_HOME || join(homedir(), '.dsh')) {
+  const profile = join(home, 'profiles', 'desktop')
+  if (existsSync(join(profile, 'lock'))) {
+    throw new Error('Desktop profile is locked; fully quit PureGamma Harness before activating REA')
+  }
+  const manifestPath = join(profile, 'package.json')
+  if (!existsSync(manifestPath)) {
+    throw new Error('Missing Desktop package.json; use the packaged installer first')
+  }
+  const original = readFileSync(manifestPath)
+  const current = readJson(manifestPath)
+  const selected = current?.dsh?.profile?.bundles
+  const dependency = current?.dependencies?.[REA_BUNDLE]
+  if (typeof dependency !== 'string' || !dependency.trim()) {
+    throw new Error('REA dependency is missing; install the bundle before activating it')
+  }
+  if (!Array.isArray(selected) || selected.some(name => typeof name !== 'string' || !name)
+    || new Set(selected).size !== selected.length) {
+    throw new Error('Invalid Desktop dsh.profile.bundles; refusing to change any file')
+  }
+  const status = inspectReaBundle(home)
+  if (!status.bundled || !status.runtimeReady) {
+    throw new Error('REA installed files or engine are missing; refusing to enable a broken bundle')
+  }
+  if (selected.includes(REA_BUNDLE)) {
+    return Object.freeze({ changed: false, backup: null, selected: selected.length })
+  }
+  if (!readFileSync(manifestPath).equals(original)) {
+    throw new Error('Desktop profile changed during inspection; retry after fully quitting')
+  }
+  const nonce = new Date().toISOString().replace(/[:.]/g, '-')
+    + '-' + process.pid + '-' + randomBytes(4).toString('hex')
+  const backup = manifestPath + '.rea-backup-' + nonce
+  copyFileSync(manifestPath, backup, constants.COPYFILE_EXCL)
+  const pending = join(dirname(manifestPath), '.package.json.rea-' + nonce + '.pending')
+  try {
+    current.dsh.profile.bundles.push(REA_BUNDLE)
+    const mode = statSync(manifestPath).mode & 0o777
+    writeFileSync(pending, JSON.stringify(current, null, 2) + '\n', { flag: 'wx', mode })
+    if (!readFileSync(manifestPath).equals(original)) {
+      throw new Error('Desktop profile changed before replacement; backup retained')
+    }
+    renameSync(pending, manifestPath)
+  } finally {
+    if (existsSync(pending)) unlinkSync(pending)
+  }
+  return Object.freeze({ changed: true, backup, selected: current.dsh.profile.bundles.length })
+}
+
 function formatStatus(result) {
   return [
     'Profile: ' + result.profile,
@@ -151,16 +207,21 @@ function formatStatus(result) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const args = process.argv.slice(2)
   if (args.length === 1 && ['-h', '--help'].includes(args[0])) {
-    console.log('Usage: node rea-plugin.mjs [--status | --verify]')
-    console.log('Read-only checks for the PureGamma / DeepSeek Harness Desktop profile.')
-    console.log('To enable a disabled REA bundle, use Desktop Plugins UI or rerun the PureGamma installer after quitting Desktop.')
+    console.log('Usage: node rea-plugin.mjs [--status | --verify | --activate]')
+    console.log('--status and --verify are read-only; --activate backs up and safely selects an existing REA bundle.')
+    console.log('Prefer the Desktop Plugins UI switch; quit the app completely before --activate.')
   } else {
     const action = args.length ? args[0] : '--status'
-    if (args.length > 1 || !['--status', '--verify'].includes(action)) {
-      console.error('Expected --status or --verify (read only)')
+    if (args.length > 1 || !['--status', '--verify', '--activate'].includes(action)) {
+      console.error('Expected --status, --verify or --activate')
       process.exitCode = 2
     } else {
       try {
+        if (action === '--activate') {
+          const change = activateInstalledReaBundle()
+          console.log(change.changed ? 'REA enabled; original backup: ' + change.backup : 'REA already selected: no change')
+          console.log('Fully restart Desktop and run --verify; confirm mcp__rea__* tools in a new session.')
+        }
         const result = inspectReaBundle()
         console.log(formatStatus(result))
         if (action === '--verify') {
