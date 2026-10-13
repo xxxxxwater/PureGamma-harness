@@ -22,6 +22,8 @@ A signed trade claim binds a SHA-256 hash of the EXACT order arguments: venue, a
 
 Gate checks configured account/venue allowlists, max notional and leverage. Lifetime is at most 300 seconds; <=120 seconds is recommended. One proof can authorize only one order digest, once, across sessions on the SAME HOST: the .spent reservation is atomic and is not refunded on an execution failure. A newly signed envelope cannot bypass a spent order digest.
 
+The local guard now independently recomputes the expected USD exposure as quantity * price * linearContracts[symbol] and refuses missing symbols, amounts exceeding maxNotionalUsd or deviation beyond maxDeviationBps (0 to 100 bps, 10 by default). The linearContracts map must explicitly list USD-quoted, linear instruments using the venue's proven base-units-per-contract multiplier. **Never use this calculation for inverse/quanto or non-USD-quoted products**; those require a separate typed adapter and a verified conversion model. A signed but mathematically inconsistent order does not become safe merely because a signer emitted it.
+
 IMPORTANT: The external risk signer MUST independently verify account balances, leverage availability, mark price, liquidation buffer, contract multiplier, and trading permissions. This plugin does not connect to the exchange or perform position reconciliation. Do not enable this against live trading without first proving the external risk service and order adapter in paper/fault-injection tests. On multi-host installations use a centralized atomic reservation service instead.
 
 ### Cross-session evidence and unknowns
@@ -77,6 +79,8 @@ attestations:
     allowedAccounts: [paper-1]
     maxNotionalUsd: 1000
     maxLeverage: 2
+    linearContracts: { BTCUSDT: 1 }
+    maxDeviationBps: 10
     maxAgeSeconds: 90
     paths:
       venue: venue

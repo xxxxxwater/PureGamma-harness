@@ -94,6 +94,27 @@ function requireExactBindingShape(args, paths) {
   }
   examine(args, shape)
 }
+/**
+ * This local notional check applies ONLY to USD-quoted linear instruments.
+ * The external risk signer remains independently responsible for margin,
+ * mark price, leverage and the actual venue's contract specifications.
+ */
+function parseLinearContracts(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) ||
+    Object.keys(input).length === 0) {
+    throw new TypeError('trade requires a nonempty linearContracts map')
+  }
+  const values = new Map()
+  for (const [symbol, multiplier] of Object.entries(input)) {
+    if (!/^[A-Z0-9_./:-]{2,40}$/.test(symbol) ||
+      !Number.isFinite(multiplier) || multiplier <= 0 || multiplier > 1e12) {
+      throw new TypeError('invalid linear-contract specification')
+    }
+    values.set(symbol, multiplier)
+  }
+  return values
+}
+
 export const RELEASE_FIELDS = ['repository','commit_sha','artifact_sha256','run_id','workflow']
 export const TRADE_FIELDS = [
   'venue', 'account', 'symbol', 'side', 'quantity', 'price',
@@ -127,6 +148,8 @@ export function configureAttestations(config = {}, mode = 'audit') {
         allowedAccounts: new Set((config.trade.allowedAccounts ?? []).map(x => text(x))),
         maxNotionalUsd: numeric(config.trade.maxNotionalUsd, 0.01, 1e12),
         maxLeverage: numeric(config.trade.maxLeverage, 1, 1000),
+        maxDeviationBps: numeric(config.trade.maxDeviationBps ?? 10, 0, 100),
+        linearContracts: parseLinearContracts(config.trade.linearContracts),
         maxAgeSeconds: numeric(config.trade.maxAgeSeconds ?? 120, 1, 300),
       }
     : null
@@ -156,6 +179,13 @@ export function tradeTarget(args, policy) {
   for (const k of ['quantity','price','notional_usd','leverage']) numeric(values[k], Number.EPSILON, 1e12)
   if (typeof values.reduce_only !== 'boolean') throw new Error('reduce-only-missing')
   if (values.notional_usd > policy.maxNotionalUsd || values.leverage > policy.maxLeverage) throw new Error('trade-policy-limit')
+  const size = policy.linearContracts.get(values.symbol)
+  if (size === undefined) throw new Error('unsupported-or-unpriced-trading-symbol')
+  const calculated = values.quantity * values.price * size
+  if (!Number.isFinite(calculated) || calculated <= 0 || calculated > policy.maxNotionalUsd ||
+      Math.abs(values.notional_usd - calculated) / calculated > policy.maxDeviationBps / 10_000) {
+    throw new Error('trade-notional-mismatch-or-limit')
+  }
   return values
 }
 

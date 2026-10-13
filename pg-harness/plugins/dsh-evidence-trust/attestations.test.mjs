@@ -24,7 +24,7 @@ const POLICY = {
     release: { tools: ['publish_release'], repository: 'xxxxxwater/PureGamma-harness',
       workflow: 'CI Verified Build', paths: RELEASE_PATHS, maxAgeSeconds: 1800 },
     trade: { tools: ['trade_place'], paths: TRADE_PATHS, allowedVenues: ['binance-pm'],
-      allowedAccounts: ['paper-1'], maxNotionalUsd: 1000, maxLeverage: 3, maxAgeSeconds: 120 },
+      allowedAccounts: ['paper-1'], maxNotionalUsd: 1000, maxLeverage: 3, linearContracts: { BTCUSDT: 1 }, maxAgeSeconds: 120 },
   },
 }
 const release = {
@@ -64,6 +64,12 @@ test('enforce refuses absent keys, invalid signing algorithms and incomplete bin
   assert.throws(() => configureAttestations({ ...POLICY.attestations,
     release: { ...POLICY.attestations.release, paths: { repository: 'repository' } },
   }, 'enforce'), /missing-or-extra/)
+  assert.throws(() => configureAttestations({ ...POLICY.attestations,
+    trade: { ...POLICY.attestations.trade, linearContracts: undefined },
+  }, 'enforce'), /linearContracts/)
+  assert.throws(() => configureAttestations({ ...POLICY.attestations,
+    trade: { ...POLICY.attestations.trade, linearContracts: { BTCUSDT: -1 } },
+  }, 'enforce'), /linear-contract/)
 })
 
 test('release requires valid Ed25519 CI signature with exact commit/artifact/run/workflow', () => withState(({ gate, ledger, vault, cfg }) => {
@@ -108,6 +114,12 @@ test('trade intent requires exact signed order; one-time reservation survives re
   assert.equal(gate.decide(invoke('trade_place', { ...order, quantity: 0.02 }), ledger).allowed, false)
   assert.equal(gate.decide(invoke('trade_place', { ...order, account: 'another-account' }), ledger).allowed, false)
   assert.equal(gate.decide(invoke('trade_place', { ...order, notional_usd: 1001 }), ledger).allowed, false)
+  // A signed order claiming $800 of exposure cannot carry a $80,000 or
+  // $8,000 base-quantity exposure; the local guard derives linear notional.
+  assert.equal(gate.decide(invoke('trade_place', { ...order, quantity: 0.1 }), ledger).reason, 'trade-notional-mismatch-or-limit')
+  assert.equal(gate.decide(invoke('trade_place', { ...order, notional_usd: 8 }), ledger).reason, 'trade-notional-mismatch-or-limit')
+  assert.equal(gate.decide(invoke('trade_place', { ...order, symbol: 'ETHUSDT' }), ledger).reason, 'unsupported-or-unpriced-trading-symbol')
+  assert.equal(gate.decide(invoke('trade_place', { ...order, price: 80080 }), ledger).reason, 'trade-notional-mismatch-or-limit')
   assert.equal(gate.decide(invoke('trade_place', { ...order, leverage: 6 }), ledger).allowed, false)
   assert.equal(gate.decide(invoke('trade_place', { ...order, reduce_only: true }), ledger).allowed, false)
   assert.equal(gate.decide(invoke('trade_place', { ...order, client_order_id: 'reuse-with-new-id' }), ledger).allowed, false)
