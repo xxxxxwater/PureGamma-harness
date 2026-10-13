@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { REA_BUNDLE, REA_RELEASE_SPEC, selectReaBundle, inspectReaBundle } from './rea-plugin.mjs'
+import { REA_BUNDLE, REA_RELEASE_SPEC, selectReaBundle, inspectReaBundle, activateInstalledReaBundle } from './rea-plugin.mjs'
 
 function withHome(fn) {
   const home = mkdtempSync(join(tmpdir(), 'pg-rea-'))
@@ -107,5 +107,96 @@ test('read-only diagnostics flag legacy home-level REA overriding the new bundle
     const state = inspectReaBundle(home)
     assert.equal(state.homePatchOverridesRea, true)
     assert.equal(state.selected, true)
+  })
+})
+
+
+function installedReaFixture(home, options = {}) {
+  const profile = join(home, 'profiles', 'desktop')
+  const bundle = join(profile, 'node_modules', REA_BUNDLE)
+  const engine = join(bundle, 'node_modules', 'rea-agents')
+  mkdirSync(join(engine, 'scripts'), { recursive: true })
+  writeFileSync(join(engine, 'package.json'), JSON.stringify({ name: 'rea-agents', version: '6.4.0' }))
+  writeFileSync(join(engine, 'scripts', 'rea.mjs'), '// fixture engine\n')
+  writeFileSync(join(bundle, 'launcher.mjs'), '// fixture launcher\n')
+  writeFileSync(join(bundle, 'package.json'), JSON.stringify({
+    name: REA_BUNDLE, version: '0.2.0',
+    dsh: { bundle: { patch: './cordis.patch.yml' } },
+  }))
+  writeFileSync(join(bundle, 'cordis.patch.yml'),
+    '- insert:\n    - id: rea-launcher\n      name: dsh-rea-bundle/launcher\n'
+    + '    - id: rea-mcp\n      name: "@deepseek-ai/dsh-mcp-client"\n'
+    + '      options:\n        serverName: rea\n        transport: stdio\n')
+  const manifest = join(profile, 'package.json')
+  const dependencies = { retained: '1.0.0', [REA_BUNDLE]: REA_RELEASE_SPEC }
+  const selected = Array.from({ length: 35 }, (_, i) => i === 34 ? 'dsh-prompt-enhancer' : 'bundle-' + i)
+  writeFileSync(manifest, JSON.stringify({
+    dependencies: options.noDependency ? { retained: '1.0.0' } : dependencies,
+    dsh: { profile: { bundles: options.enabled ? [...selected, REA_BUNDLE] : selected } },
+    preservedSettings: { safety: 'enabled' },
+  }, null, 2) + '\n')
+  return { profile, manifest, selected }
+}
+
+test('local activation repairs installed-but-disabled bundle, preserving 35 entries and backup exactly', () => {
+  withHome(home => {
+    const { profile, manifest, selected } = installedReaFixture(home)
+    assert.equal(inspectReaBundle(home).runtimeReady, true)
+    const previous = readFileSync(manifest)
+    const result = activateInstalledReaBundle(home)
+    assert.equal(result.changed, true)
+    assert.ok(result.backup.startsWith(manifest + '.rea-backup-'))
+    assert.deepEqual(readFileSync(result.backup), previous)
+    const updated = JSON.parse(readFileSync(manifest, 'utf8'))
+    assert.deepEqual(updated.dsh.profile.bundles.slice(0, 35), selected)
+    assert.equal(updated.dsh.profile.bundles[35], REA_BUNDLE)
+    assert.deepEqual(updated.dependencies, { retained: '1.0.0', [REA_BUNDLE]: REA_RELEASE_SPEC })
+    assert.deepEqual(updated.preservedSettings, { safety: 'enabled' })
+    const after = readFileSync(manifest)
+    const second = activateInstalledReaBundle(home)
+    assert.equal(second.changed, false)
+    assert.deepEqual(readFileSync(manifest), after)
+    assert.equal(readdirSync(profile).filter(x => x.startsWith('package.json.rea-backup-')).length, 1)
+  })
+})
+
+test('local activation fails closed if dependency is missing or bundle selection corrupt', () => {
+  for (const options of [{ noDependency: true }, {}]) {
+    withHome(home => {
+      const { profile, manifest } = installedReaFixture(home, options)
+      if (!options.noDependency) {
+        const config = JSON.parse(readFileSync(manifest, 'utf8'))
+        config.dsh.profile.bundles.push('bundle-1')
+        writeFileSync(manifest, JSON.stringify(config))
+      }
+      const initial = readFileSync(manifest)
+      assert.throws(() => activateInstalledReaBundle(home))
+      assert.deepEqual(readFileSync(manifest), initial)
+      assert.equal(readdirSync(profile).filter(x => x.startsWith('package.json.rea-backup-')).length, 0)
+    })
+  }
+})
+
+test('local activation rejects missing plugin files and an active Desktop profile lock', () => {
+  withHome(home => {
+    const { profile, manifest } = installedReaFixture(home)
+    writeFileSync(join(profile, 'lock'), 'locked')
+    assert.throws(() => activateInstalledReaBundle(home), /locked/)
+    rmSync(join(profile, 'lock'))
+    rmSync(join(profile, 'node_modules', REA_BUNDLE, 'launcher.mjs'))
+    assert.throws(() => activateInstalledReaBundle(home), /missing/)
+    assert.equal(readdirSync(profile).filter(x => x.startsWith('package.json.rea-backup-')).length, 0)
+    assert.equal(JSON.parse(readFileSync(manifest, 'utf8')).dsh.profile.bundles.includes(REA_BUNDLE), false)
+  })
+})
+
+test('already enabled REA requires no write or backup', () => {
+  withHome(home => {
+    const { profile, manifest } = installedReaFixture(home, { enabled: true })
+    const before = readFileSync(manifest)
+    const result = activateInstalledReaBundle(home)
+    assert.equal(result.changed, false)
+    assert.deepEqual(readFileSync(manifest), before)
+    assert.equal(readdirSync(profile).filter(x => x.startsWith('package.json.rea-backup-')).length, 0)
   })
 })
