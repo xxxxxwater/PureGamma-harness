@@ -1,6 +1,6 @@
 /** Local, append-only, hash-chained evidence without raw tool payload retention. */
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, existsSync, openSync, writeSync, fsyncSync, closeSync, lstatSync, constants } from 'node:fs'
+import { mkdirSync, rmdirSync, readFileSync, existsSync, openSync, writeSync, readSync, fsyncSync, closeSync, fstatSync, lstatSync, constants } from 'node:fs'
 import { join } from 'node:path'
 
 const ZERO = '0'.repeat(64)
@@ -46,6 +46,9 @@ export class TrustLedger {
     if (lstatSync(root).isSymbolicLink()) throw new Error('unsafe trust root')
     this.root = root
     this.path = join(root, sha(sessionId) + '.jsonl')
+    this.lockPath = this.path + '.writer-lock'
+    this.persistedSize = 0
+    this.persistedTail = Buffer.alloc(0)
     this.events = []
     this.observations = new Map()
     this.unknowns = new Map()
@@ -57,8 +60,13 @@ export class TrustLedger {
         const bytes = readFileSync(this.path)
         if (bytes.length > CAP || (bytes.length && bytes.at(-1) !== 10)) throw new Error('oversized or truncated ledger')
         for (const line of bytes.toString('utf8').split('\n')) if (line) this.replay(JSON.parse(line))
+        this.persistedSize = bytes.length
+        this.persistedTail = bytes.subarray(-1024)
       } catch (e) { this.broken = String(e?.message ?? e) }
     }
+    // Do not automatically delete abandoned locks: the preceding append may
+    // have partially persisted an event. Recovery requires deliberate review.
+    if (existsSync(this.lockPath)) this.broken = 'unfinished-ledger-writer'
   }
   apply(event) {
     const p = event.payload
@@ -109,17 +117,45 @@ export class TrustLedger {
     probe.links = new Map(this.links)
     probe.apply(e)
     const bytes = Buffer.from(JSON.stringify(e) + '\n')
+    let locked = false
+    let durable = false
     try {
-      if (existsSync(this.path) && lstatSync(this.path).size + bytes.length > CAP) throw new Error('ledger size limit')
-      const fd = openSync(this.path, constants.O_CREAT | constants.O_APPEND | constants.O_WRONLY | (constants.O_NOFOLLOW ?? 0), 0o600)
+      // mkdir is atomic across cooperating local processes. Do not steal a
+      // crashed writer's lock and never allow two Session instances to append
+      // from the same stale in-memory seq/head.
+      mkdirSync(this.lockPath, { mode: 0o700 })
+      locked = true
+      const fd = openSync(this.path,
+        constants.O_CREAT | constants.O_APPEND | constants.O_RDWR | (constants.O_NOFOLLOW ?? 0), 0o600)
       try {
+        const file = fstatSync(fd)
+        if (!file.isFile() || file.size !== this.persistedSize) throw new Error('stale-ledger-writer')
+        // Constant-size tail comparison also detects same-size edits to the
+        // last record; complete hash-chain verification still occurs on load.
+        const actual = Buffer.alloc(this.persistedTail.length)
+        if (actual.length &&
+          readSync(fd, actual, 0, actual.length, file.size - actual.length) !== actual.length) {
+          throw new Error('ledger-tail-read-failed')
+        }
+        if (!actual.equals(this.persistedTail)) throw new Error('stale-ledger-tail')
+        if (file.size + bytes.length > CAP) throw new Error('ledger size limit')
         if (writeSync(fd, bytes) !== bytes.length) throw new Error('short ledger write')
         fsyncSync(fd)
+        durable = true
       } finally { closeSync(fd) }
     } catch (err) {
       this.broken = String(err?.message ?? err)
       throw err
+    } finally {
+      // If the append failed or flush was uncertain, leave the lock in place
+      // and require explicit recovery, rather than silently trusting a tail.
+      if (locked && durable) {
+        try { rmdirSync(this.lockPath) }
+        catch (err) { this.broken = 'ledger-lock-release-failed'; throw err }
+      }
     }
+    this.persistedSize += bytes.length
+    this.persistedTail = Buffer.concat([this.persistedTail, bytes]).subarray(-1024)
     this.apply(e)
     this.events.push(e)
     return e.digest

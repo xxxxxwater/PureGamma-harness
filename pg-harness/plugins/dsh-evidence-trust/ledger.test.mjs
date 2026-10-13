@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, appendFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, appendFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
@@ -77,4 +77,36 @@ test('reconfiguring verifier invalidates an old unknown resolution until reverif
   const updated = l.observe(ok('ci_verify_new').exec, ok('ci_verify_new').result)
   l.resolveUnknown(unknownId, updated, newer)
   assert.equal(l.evaluate('publish_release', newer).allowed, true)
+}))
+
+test('single writer lock serializes commits and preserves replay sequence', () => withLedger((ledger, root) => {
+  const evidence = ok('read_only')
+  assert.equal(existsSync(ledger.lockPath), false)
+  ledger.observe(evidence.exec, evidence.result)
+  assert.equal(existsSync(ledger.lockPath), false)
+  ledger.observe(evidence.exec, evidence.result)
+  const restart = new TrustLedger(root, 'session/test')
+  assert.equal(restart.status(policy).integrity, 'ok')
+  assert.equal(restart.status(policy).observations, 2)
+}))
+
+test('second stale instance cannot overwrite first instance hash-chain head', () => withLedger((first, root) => {
+  const stale = new TrustLedger(root, 'session/test')
+  const row = ok('read_only')
+  first.observe(row.exec, row.result)
+  assert.throws(() => stale.observe(row.exec, row.result), /stale-ledger-writer/)
+  assert.equal(stale.status(policy).integrity, 'unavailable')
+  const openedDuringUncertainWrite = new TrustLedger(root, 'session/test')
+  assert.equal(openedDuringUncertainWrite.broken, 'unfinished-ledger-writer')
+  assert.equal(openedDuringUncertainWrite.evaluate('publish_release', policy).allowed, false)
+}))
+
+test('same-length tail tampering blocks the current in-memory writer', () => withLedger(l => {
+  const row = ok('read_only')
+  l.observe(row.exec, row.result)
+  const raw = readFileSync(l.path, 'utf8')
+  assert.ok(raw.includes('read_only'))
+  writeFileSync(l.path, raw.replace('read_only', 'edit_file'))
+  assert.throws(() => l.observe(row.exec, row.result), /stale-ledger-tail/)
+  assert.equal(l.evaluate('publish_release', policy).allowed, false)
 }))
