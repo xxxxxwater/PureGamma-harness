@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { install } from './install.mjs'
+import { REA_BUNDLE, REA_RELEASE_SPEC } from './rea-plugin.mjs'
 
 test('installation preserves third-party bundles and user settings and remains repeatable', () => {
   const home = mkdtempSync(join(tmpdir(), 'pg-install-'))
@@ -22,6 +23,8 @@ test('installation preserves third-party bundles and user settings and remains r
     assert.ok(result.dsh.profile.bundles.includes('dsh-codex-cli-models'))
     assert.equal(result.dependencies['dsh-evidence-trust'], 'link:../../local-plugins/dsh-evidence-trust')
     assert.ok(result.dsh.profile.bundles.includes('dsh-evidence-trust'))
+    assert.equal(result.dependencies[REA_BUNDLE], REA_RELEASE_SPEC)
+    assert.equal(result.dsh.profile.bundles.filter(name => name === REA_BUNDLE).length, 1)
     const trustPlugin = join(home, 'local-plugins', 'dsh-evidence-trust')
     assert.ok(readFileSync(join(trustPlugin, 'index.js'), 'utf8').includes("ctx.tools.guard"))
     assert.equal(result.dsh.profile.bundles.includes('dsh-task-completion-chime'), process.platform === 'darwin')
@@ -67,5 +70,30 @@ test('Codex CLI upgrades the legacy model route without mutating existing creden
       home, 'local-plugins', 'dsh-codex-cli-models', 'package.json',
     ), 'utf8'))
     assert.equal(packageInfo.dsh.bundle.patch, './cordis.patch.yml')
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+test('already-installed-but-disabled REA is activated without replacing its source or user configuration', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-rea-existing-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    const originalReaSource = 'https://github.com/xxxxxwater/rea#dsh-plugin-v0.2.0'
+    const before = {
+      dependencies: { another: '1.0.0', [REA_BUNDLE]: originalReaSource },
+      dsh: { profile: { bundles: ['another', 'dsh-prompt-enhancer'] } },
+      custom: { unchanged: true },
+    }
+    writeFileSync(join(profile, 'package.json'), JSON.stringify(before))
+    install(home)
+    const after = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(after.dependencies[REA_BUNDLE], originalReaSource)
+    assert.deepEqual(after.dsh.profile.bundles.slice(0, 2), before.dsh.profile.bundles)
+    assert.equal(after.dsh.profile.bundles.filter(x => x === REA_BUNDLE).length, 1)
+    assert.deepEqual(after.custom, before.custom)
+    install(home)
+    const repeated = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(repeated.dependencies[REA_BUNDLE], originalReaSource)
+    assert.equal(repeated.dsh.profile.bundles.filter(x => x === REA_BUNDLE).length, 1)
   } finally { rmSync(home, { recursive: true, force: true }) }
 })

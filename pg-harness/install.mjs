@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installUniverPreviewBridge } from './plugin-patches/univer-office/patch.mjs'
 import { installBundledPluginCompatibility } from './plugin-patches/bundled-compat.mjs'
+import { selectReaBundle } from './rea-plugin.mjs'
 
 /**
  * Install PureGamma UI packages into the reserved desktop profile with reversible backups.
@@ -70,6 +71,9 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
       if (!manifest.dsh.profile.bundles.includes(bundle)) manifest.dsh.profile.bundles.push(bundle)
     }
   }
+  // REA is distributed as a standalone, build-free Harness plugin. Installing
+  // the npm dependency alone does not activate its Cordis layer.
+  selectReaBundle(manifest)
   const pending = manifestPath + '.pg-pending'
   writeFileSync(pending, JSON.stringify(manifest, null, 2) + '\n', { mode: 0o600 })
   renameSync(pending, manifestPath)
