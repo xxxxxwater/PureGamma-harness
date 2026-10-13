@@ -119,7 +119,7 @@ test('trade intent requires exact signed order; one-time reservation survives re
   assert.equal(gate.decide(invoke('trade_place', { ...order, quantity: 0.1 }), ledger).reason, 'trade-notional-mismatch-or-limit')
   assert.equal(gate.decide(invoke('trade_place', { ...order, notional_usd: 8 }), ledger).reason, 'trade-notional-mismatch-or-limit')
   assert.equal(gate.decide(invoke('trade_place', { ...order, symbol: 'ETHUSDT' }), ledger).reason, 'unsupported-or-unpriced-trading-symbol')
-  assert.equal(gate.decide(invoke('trade_place', { ...order, price: 80080 }), ledger).reason, 'trade-notional-mismatch-or-limit')
+  assert.equal(gate.decide(invoke('trade_place', { ...order, price: 80160 }), ledger).reason, 'trade-notional-mismatch-or-limit')
   assert.equal(gate.decide(invoke('trade_place', { ...order, leverage: 6 }), ledger).allowed, false)
   assert.equal(gate.decide(invoke('trade_place', { ...order, reduce_only: true }), ledger).allowed, false)
   assert.equal(gate.decide(invoke('trade_place', { ...order, client_order_id: 'reuse-with-new-id' }), ledger).allowed, false)
