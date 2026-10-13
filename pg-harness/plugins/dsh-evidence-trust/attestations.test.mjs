@@ -79,6 +79,12 @@ test('release requires valid Ed25519 CI signature with exact commit/artifact/run
   const imported = vault.import(envelope)
   assert.equal(imported.kind, 'release')
   assert.equal(gate.decide(invoke('publish_release', release), ledger).allowed, true)
+  assert.equal(gate.decide(invoke('publish_release', release), ledger, true).allowed, true)
+  assert.equal(ledger.authorizations.size, 1)
+  const receipt = [...ledger.authorizations.values()][0]
+  assert.equal(receipt.authorization_kind, 'release')
+  assert.equal(receipt.target_hash, digest(release))
+  assert.equal(receipt.proof_id, imported.id)
   for (const key of ['commit_sha','artifact_sha256','run_id','repository']) {
     assert.equal(gate.decide(invoke('publish_release', { ...release, [key]: 'not-matching' }), ledger).allowed, false, key)
   }
@@ -110,6 +116,11 @@ test('trade intent requires exact signed order; one-time reservation survives re
   const result = gate.decide(invoke('trade_place', order), ledger, true)
   assert.equal(result.allowed, true)
   assert.equal(result.proof_id, att.id)
+  assert.equal(ledger.authorizations.size, 1)
+  const receipt = [...ledger.authorizations.values()][0]
+  assert.equal(receipt.authorization_kind, 'trade')
+  assert.equal(receipt.target_hash, digest(order))
+  assert.equal(receipt.proof_id, att.id)
   assert.equal(gate.decide(invoke('trade_place', order), new TrustLedger(root, 'session-B'), true).allowed, false)
   assert.equal(gate.decide(invoke('trade_place', { ...order, quantity: 0.02 }), ledger).allowed, false)
   assert.equal(gate.decide(invoke('trade_place', { ...order, account: 'another-account' }), ledger).allowed, false)
@@ -153,4 +164,16 @@ test('cross-session links are historical; only signed resolution matches gated p
   assert.equal(restart.status(old).integrity, 'ok')
   assert.equal(restart.status(old).linked_evidence, 0)
   assert.equal(gate.decide(invoke('publish_release', release), restart).allowed, true)
+}))
+
+test('a failed authorization receipt never dispatches a trade and never refunds its reservation', () => withState(({ gate, ledger, vault, root }) => {
+  vault.import(signEnvelope(tradePayload(), priv, 'ci-v1'))
+  const record = ledger.recordGrant.bind(ledger)
+  ledger.recordGrant = () => { throw new Error('simulated-disk-unavailable') }
+  const denied = gate.decide(invoke('trade_place', order), ledger, true)
+  assert.equal(denied.allowed, false)
+  assert.equal(denied.reason, 'authorization-receipt-unavailable')
+  ledger.recordGrant = record
+  assert.equal(gate.decide(invoke('trade_place', order), new TrustLedger(root, 'session-after-crash'), true).allowed, false)
+  assert.equal(ledger.authorizations.size, 0)
 }))

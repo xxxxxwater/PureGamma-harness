@@ -120,6 +120,8 @@ The standalone sign-attestation.mjs is a key-using primitive for offline, indepe
 
 Ledger: $DSH_HOME/pg-trust-ledgers/<sha256(session-id)>.jsonl. Signed envelopes: $DSH_HOME/pg-trust-ledgers/attestations-v1/*.json. Spent markers there as well. A single-session writer lock and persisted-tail check reject concurrent/stale appends, including same-size tail changes. A crash or uncertain write deliberately leaves a writer lock and blocks further writes; investigate and back up the ledger before manual recovery. Multiple processes must not write the same session simultaneously, and the lock is NOT a distributed lock.
 
+Signed authorizations are now recorded before dispatch as hash-only receipts containing the signer proof ID, tool identity and canonical target digest. A failed receipt write denies the operation; a reserved trade stays spent. These receipts are audit records, not reusable grants.
+
 The ledger detects edits but cannot prevent a privileged local attacker rewriting all records. The shared vault is host-local; production multi-host requires a centralized transactional authority.
 
 ## Tests and rollout

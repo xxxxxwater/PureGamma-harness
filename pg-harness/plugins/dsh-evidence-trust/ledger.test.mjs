@@ -110,3 +110,15 @@ test('same-length tail tampering blocks the current in-memory writer', () => wit
   assert.throws(() => l.observe(row.exec, row.result), /stale-ledger-tail/)
   assert.equal(l.evaluate('publish_release', policy).allowed, false)
 }))
+
+test('authorization receipts are replayable and never expose tool arguments', () => withLedger((ledger, root) => {
+  const target = { symbol: 'BTCUSDT', client_order_id: 'sensitive-private-order-id' }
+  ledger.recordGrant('trade_place', 'trade', 'a'.repeat(64), target)
+  assert.equal(ledger.status(policy).signed_authorizations, 1)
+  const receipt = ledger.status(policy).authorization_receipts[0]
+  assert.equal(receipt.target_hash, digest(target))
+  assert.ok(!readFileSync(ledger.path, 'utf8').includes('sensitive-private-order-id'))
+  const reopened = new TrustLedger(root, 'session/test')
+  assert.equal(reopened.status(policy).integrity, 'ok')
+  assert.equal(reopened.status(policy).signed_authorizations, 1)
+}))

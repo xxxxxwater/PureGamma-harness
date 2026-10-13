@@ -54,6 +54,15 @@ export class SignedGate {
       try { this.vault.reserveTrade(digest(target)) }
       catch { return { allowed: false, reason: 'trade-intent-already-spent-or-unavailable' } }
     }
+    // Commit a receipt before the protected body. A failed ledger append must
+    // block execution; the trade reservation deliberately remains spent.
+    if (reserve) {
+      try {
+        ledger.recordGrant(exec.name, trade ? 'trade' : 'release', auth.proof_id, target)
+      } catch {
+        return { allowed: false, reason: 'authorization-receipt-unavailable' }
+      }
+    }
     return { allowed: true, reason: trade ? 'signed-risk-authorization' : 'signed-ci-authorization',
       kind: trade ? 'trade' : 'release', proof_id: auth.proof_id }
   }

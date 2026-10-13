@@ -51,6 +51,7 @@ export class TrustLedger {
     this.persistedTail = Buffer.alloc(0)
     this.events = []
     this.observations = new Map()
+    this.authorizations = new Map()
     this.unknowns = new Map()
     this.links = new Map()
     this.broken = null
@@ -70,7 +71,15 @@ export class TrustLedger {
   }
   apply(event) {
     const p = event.payload
-    if (p?.kind === 'observation') {
+    if (p?.kind === 'authorization') {
+      if (!['trade','release'].includes(p.authorization_kind) ||
+        typeof p.tool !== 'string' || !p.tool ||
+        typeof p.proof_id !== 'string' || !/^[0-9a-f]{64}$/.test(p.proof_id) ||
+        typeof p.target_hash !== 'string' || !/^[0-9a-f]{64}$/.test(p.target_hash)) {
+        throw new Error('invalid signed authorization receipt')
+      }
+      this.authorizations.set(event.digest, { ...p, seq: event.seq, time: event.time })
+    } else if (p?.kind === 'observation') {
       if (typeof p.tool !== 'string' || typeof p.failed !== 'boolean' || typeof p.arguments_hash !== 'string' || typeof p.result_hash !== 'string') throw new Error('bad observation')
       this.observations.set(event.digest, { ...p, seq: event.seq })
     } else if (p?.kind === 'unknown-open') {
@@ -113,6 +122,7 @@ export class TrustLedger {
     // Validate on a private snapshot BEFORE the irreversible disk append.
     const probe = Object.create(TrustLedger.prototype)
     probe.observations = new Map(this.observations)
+    probe.authorizations = new Map(this.authorizations)
     probe.unknowns = new Map([...this.unknowns].map(([k,v]) => [k,{ ...v }]))
     probe.links = new Map(this.links)
     probe.apply(e)
@@ -182,6 +192,17 @@ export class TrustLedger {
       source_evidence_id: evidenceId, source_head: head,
     })
   }
+  /**
+   * Durable pre-dispatch authorization receipt. The session log may never
+   * receive a tool/result after a process crash, so record BEFORE the body.
+   * The receipt is an audit record, not reusable proof of permission.
+   */
+  recordGrant(tool, authorizationKind, proofId, target) {
+    return this.append({
+      kind: 'authorization', tool, authorization_kind: authorizationKind,
+      proof_id: proofId, target_hash: digest(target),
+    })
+  }
   openUnknown(source, question) {
     if (!this.observations.has(source)) throw new Error('source must be existing evidence')
     if (typeof question !== 'string' || !question.trim() || question.length > 240) throw new TypeError('invalid question')
@@ -227,9 +248,11 @@ export class TrustLedger {
   }
   status(policy) {
     return { mode: policy.mode, integrity: this.broken ? 'unavailable' : 'ok',
-      records: this.events.length, observations: this.observations.size, linked_evidence: this.links.size,
+      records: this.events.length, observations: this.observations.size,
+      signed_authorizations: this.authorizations.size, linked_evidence: this.links.size,
       open_unknowns: [...this.unknowns.values()].filter(u => !u.resolvedBy).map(u => ({ id: u.id, question: u.question, source: u.source })),
       evidence: [...this.observations].slice(-20).map(([id,v]) => ({ id, tool: v.tool, failed: v.failed, seq: v.seq })),
+      authorization_receipts: [...this.authorizations].slice(-20).map(([id,v]) => ({ id, ...v })),
       evidence_links: [...this.links].slice(-20).map(([id,p]) => ({ id, ...p })),
       protected_tools: policy.protectedTools, verifier_tools: policy.verifierTools }
   }
