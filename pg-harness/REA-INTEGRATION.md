@@ -37,7 +37,35 @@ not a Harness bundle.
 
 If REA is already installed but disabled, prefer
 **Plugins → Installed plugins → dsh-rea-bundle → Enable**. If the UI switch
-is inaccessible, fully quit Desktop and rerun the PureGamma installer.
+is inaccessible, **do not reinstall everything**. Fully quit Desktop
+and run the opt-in local repair command for an already-installed bundle:
+
+~~~sh
+node pg-harness/rea-plugin.mjs --status
+# Completely quit Desktop before:
+node pg-harness/rea-plugin.mjs --activate
+# Relaunch Desktop before:
+node pg-harness/rea-plugin.mjs --verify
+~~~
+
+For the packaged Intel/macOS app (no global Node required):
+
+~~~sh
+APP="/Applications/PureGamma Harness.app"
+# Fully quit the app before running:
+ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/PureGamma Harness" \
+  "$APP/Contents/Resources/pg-harness/rea-plugin.mjs" --activate
+~~~
+
+The script validates the existing REA plugin and runtime, refuses to run
+against a locked Desktop profile, preserves other dependencies and all
+35 existing bundle entries, creates an exact `package.json.rea-backup-...`
+recovery file, then enables REA once. It never performs pnpm installs,
+updates the lockfile or changes build-script approval settings. Existing
+user credentials and session history are not touched. After restarting,
+`--verify` still checks only configuration, not live MCP/tool readiness.
+Re-running the full installer remains available, but is unnecessary for
+this installed-but-disabled case.
 That run preserves your existing REA version and dependency source (even a
 custom Git-tagged package), keeps existing bundle ordering, and only appends
 the missing enabled entry. Other plugins, settings, credentials and sessions

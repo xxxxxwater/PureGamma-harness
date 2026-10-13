@@ -37,7 +37,33 @@ REA 的 `main` 已领先于该稳定插件绑定的引擎版本；更新 Git 主
 例如你的 Desktop 配置有 `dsh-rea-bundle` 依赖、pnpm 日志成功，
 却没有该 `dsh.profile.bundles` 项。这不是 REA 引擎损坏。
 优先在 **插件 → 已安装插件 → dsh-rea-bundle** 中打开开关。
-如 UI 无法操作，完全退出 Desktop 再运行 PureGamma 配套安装器。
+如 UI 无法操作，**无需重新安装整套插件**：完全退出 Desktop，
+直接用 PureGamma 的本机激活工具修复选择列表。该命令只操作已安装且
+入口可解析的 REA，失败时保持原文件不变：
+
+~~~sh
+# 本机已有 Node.js 且已克隆本仓库：
+node pg-harness/rea-plugin.mjs --status
+# 完全退出 Desktop 后：
+node pg-harness/rea-plugin.mjs --activate
+# 重新启动 Desktop 后：
+node pg-harness/rea-plugin.mjs --verify
+~~~
+
+安装版的 Intel Mac 不需要额外安装 Node，可调用应用内置的 Electron Node：
+
+~~~sh
+APP="/Applications/PureGamma Harness.app"
+# 完全退出应用后：
+ELECTRON_RUN_AS_NODE=1 "$APP/Contents/MacOS/PureGamma Harness" \
+  "$APP/Contents/Resources/pg-harness/rea-plugin.mjs" --activate
+~~~
+
+成功激活会打印原始 `package.json.rea-backup-...` 的绝对路径。
+脚本不会修改 `pnpm-lock.yaml`、其他依赖、凭据或现有 bundle 顺序，
+重复运行不会再次写入。要回滚，请在应用退出后使用备份恢复
+`package.json`。也可以继续运行 PureGamma 配套安装器，但它可能
+进行整套依赖检查，因此不是此场景的首选。
 
 安装器不会覆盖已有 REA 依赖来源、版本或其他插件，只会对没有启用
 的 REA 追加一次，保留原数组顺序、配置、会话和凭据。
