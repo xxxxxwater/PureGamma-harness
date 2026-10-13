@@ -39,3 +39,48 @@ jobs:
           node --check pg-harness/plugins/dsh-evidence-trust/sign-attestation.mjs
           node --check pg-harness/plugins/dsh-evidence-trust/verify-ci-and-sign.mjs
           node --test pg-harness/plugins/dsh-evidence-trust/*.test.mjs
+
+  rea-published-bundle:
+    name: Verify published REA Desktop bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.28.5'
+      - name: Validate released tarball checksum and actual pnpm installation
+        run: |
+          set -eu
+          archive="$RUNNER_TEMP/dsh-rea-bundle-0.2.0.tgz"
+          curl -fLsS --retry 3 -o "$archive" \
+            'https://github.com/xxxxxwater/rea/releases/download/dsh-v0.2.0/dsh-rea-bundle-0.2.0.tgz'
+          printf '%s  %s\n' '011e78aebde2b71577286869b65719af83de888e01313445e744999d78844630' "$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/puregamma-rea-install"
+          cd "$RUNNER_TEMP/puregamma-rea-install"
+          printf '%s\n' '{"name":"puregamma-rea-smoke","private":true}' > package.json
+          pnpm add "$archive"
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const {createRequire} = require('node:module');
+          const pkg = require('./node_modules/dsh-rea-bundle/package.json');
+          assert.equal(pkg.name, 'dsh-rea-bundle');
+          assert.equal(pkg.version, '0.2.0');
+          assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml');
+          assert.equal(pkg.dependencies['rea-agents'], '6.4.0');
+          for (const key of ['prepare','prepack','install','postinstall','preinstall'])
+            assert.equal(pkg.scripts?.[key], undefined);
+          const launcher = fs.realpathSync('./node_modules/dsh-rea-bundle/launcher.mjs');
+          const runtime = createRequire(launcher).resolve('rea-agents/scripts/rea.mjs');
+          assert.ok(fs.statSync(runtime).isFile());
+          const patch = fs.readFileSync('./node_modules/dsh-rea-bundle/cordis.patch.yml','utf8');
+          for (const row of ['rea-launcher','rea-mcp','serverName: rea'])
+            assert.ok(patch.includes(row), row);
+          console.log('PASS: published REA bundle, nested runtime, and Cordis patch');
+          NODE
