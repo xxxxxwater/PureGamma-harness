@@ -26,6 +26,8 @@ jobs:
         run: node --test pg-harness/plugin-patches/bundled-compat.test.mjs
       - name: Existing installer regression
         run: node --test pg-harness/install.test.mjs
+      - name: REA standalone bundle selection and local diagnostics
+        run: node --test pg-harness/rea-plugin.test.mjs
       - name: Validate completion notifications
         run: node --test pg-harness/plugins/dsh-task-completion-chime/plugin.test.mjs
       - name: Validate PureGamma evidence ledger and verification gate

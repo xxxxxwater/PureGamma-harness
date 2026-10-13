@@ -111,6 +111,10 @@ export function inspectReaBundle(home = process.env.DSH_HOME || join(homedir(), 
 
   const compiledPath = join(profile, 'cordis.yml')
   const compiled = readTextIfPresent(compiledPath)
+  const legacyPatchPath = join(home, 'cordis.patch.yml')
+  // Home-level patches outrank profile bundles; report conflicting legacy
+  // config but never delete, change or override a user's global patch.
+  const homePatchOverridesRea = includesRow(readTextIfPresent(legacyPatchPath), 'rea-mcp')
   const composed = includesRow(compiled, 'rea-launcher') && includesRow(compiled, 'rea-mcp')
   const manifestMtime = fileMtime(manifestPath)
   const compiledMtime = fileMtime(compiledPath)
@@ -126,6 +130,7 @@ export function inspectReaBundle(home = process.env.DSH_HOME || join(homedir(), 
     runtimeError,
     composed,
     composedFresh,
+    homePatchOverridesRea,
   }
 }
 
@@ -137,6 +142,7 @@ function formatStatus(result) {
     'Bundle package and patch: ' + result.bundled,
     'REA runtime resolved: ' + result.runtimeReady,
     'Cordis composed: ' + result.composed,
+    'Home-level rea-mcp override: ' + result.homePatchOverridesRea,
     'Cordis current with profile: ' + result.composedFresh,
     ...result.runtimeError === null ? [] : ['Runtime resolution: ' + result.runtimeError],
   ].join('\n')
@@ -159,7 +165,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
         console.log(formatStatus(result))
         if (action === '--verify') {
           if (result.source === null || !result.selected || !result.bundled
-              || !result.runtimeReady || !result.composedFresh) {
+              || !result.runtimeReady || !result.composedFresh
+              || result.homePatchOverridesRea) {
             throw new Error('REA is not yet active; install/enable it and fully restart Desktop')
           }
           console.log('PASS: REA dependency, selected bundle, local engine and generated Cordis layer')

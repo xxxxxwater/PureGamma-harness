@@ -93,3 +93,19 @@ test('Cordis output with wrong or stale launcher rows is not accepted as a healt
     assert.equal(inspectReaBundle(home).composedFresh, false)
   })
 })
+
+test('read-only diagnostics flag legacy home-level REA overriding the new bundle', () => {
+  withHome(home => {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: { [REA_BUNDLE]: REA_RELEASE_SPEC },
+      dsh: { profile: { bundles: [REA_BUNDLE] } },
+    }))
+    writeFileSync(join(home, 'cordis.patch.yml'),
+      '- insert:\n    - id: rea-mcp\n      name: old-mcp\n')
+    const state = inspectReaBundle(home)
+    assert.equal(state.homePatchOverridesRea, true)
+    assert.equal(state.selected, true)
+  })
+})
