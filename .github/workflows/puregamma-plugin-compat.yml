@@ -6,6 +6,11 @@ on:
     paths:
       - 'pg-harness/**'
       - '.github/workflows/puregamma-plugin-compat.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'pg-harness/**'
+      - '.github/workflows/puregamma-plugin-compat.yml'
   workflow_dispatch:
 
 permissions:
