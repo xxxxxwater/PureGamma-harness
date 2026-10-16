@@ -2,24 +2,36 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write apps/desktop/README.md
+/:
+  en: 0d36989eb614345d
+  zh: a0a1a18c07621393
 /puregamma-harness-desktop:
-  en: 5236b010a2da0881
-  zh: b48d42311b1972a2
+  en: 42eba55e9ac54659
+  zh: 4b758dc910ed5e48
+/puregamma-harness-desktop/summary:
+  en: 7bc8bf30de693222
+  zh: e85993d8852b6cab
+/puregamma-harness-desktop/table-of-contents:
+  en: 05fd227f99ee535a
+  zh: 60d7d62bc0026973
+/puregamma-harness-desktop/application-overview:
+  en: ec2ed74f5d3cce38
+  zh: 7f3aee3821fce9c4
 /puregamma-harness-desktop/terminal-command:
-  en: bef92953c237363f
-  zh: d21d6effd21b8c00
+  en: 5f2d25a1d8472647
+  zh: 2acb5c5d7d1917e2
 /puregamma-harness-desktop/closing-the-window-and-quitting:
-  en: 543f2c6388ea23d5
-  zh: 6ee0499e5a8ac023
+  en: 2cdefbf54f5c33f4
+  zh: c0039d73451afa36
 /puregamma-harness-desktop/key-technical-decisions:
-  en: 9d65c4f0d2d5c5f9
+  en: 7478c963e6f6c19d
   zh: 4a2d701d066898b1
 /puregamma-harness-desktop/key-technical-decisions/bundled-workspace-dependencies:
-  en: 2b049b4f104be1c2
-  zh: 1e8f3a9f7eb15e2b
+  en: 3368ff9b955ada69
+  zh: e9209ef6ad4fd305
 /puregamma-harness-desktop/bundled-command-runtime:
-  en: 09f0b75af9f0ed14
-  zh: 60bbc2e67d5e87a8
+  en: 372297005b57a08b
+  zh: 074a635ac17e4362
 /puregamma-harness-desktop/installation-ownership:
   en: 22153a298a6662e1
   zh: 3600803c8c9d0274
@@ -27,8 +39,8 @@
   en: d6c324941383f1b8
   zh: b59e8bf075906859
 /puregamma-harness-desktop/installation-ownership/host-environment:
-  en: 84a9cc7ca9455aa8
-  zh: 4091b8aa8231b74a
+  en: 98cf848762482d48
+  zh: 74f9100a39ec8c2f
 /puregamma-harness-desktop/develop:
   en: fe6d23e6a3d3bc66
   zh: d60c8d3a55747916
@@ -36,41 +48,17 @@
   en: a51346b8d880ddba
   zh: 7913214c1c66063c
 /puregamma-harness-desktop/develop/welcome-window-appearance:
-  en: ae319a496639b38d
-  zh: ef044103240ac9da
+  en: 617a89aeb28131b9
+  zh: 4d84bd5d86501c86
 /puregamma-harness-desktop/package:
-  en: 4cd8a8da6977928d
-  zh: 9f624855a2edac37
-/puregamma-harness-desktop/package/release-versions:
-  en: a0f66101901ab73e
-  zh: 232bdb9374474132
-/puregamma-harness-desktop/package/local-macos-dmg-without-release-signing:
-  en: 57869a5e3885f843
-  zh: 7cfc01b2dcbebd78
-/puregamma-harness-desktop/package/local-official-bundles-from-a-loopback-registry:
-  en: 5f05072ec82cc62d
-  zh: a3d63b58d1ef2db7
-/puregamma-harness-desktop/package/runtime-file-selection:
-  en: e7c1eb8e78fe46e3
-  zh: b7ea497dd75be524
-/puregamma-harness-desktop/package/upload-updates:
-  en: f48baa680e841b0d
-  zh: 25ded1aeaac6dad1
-/puregamma-harness-desktop/package/unsigned-windows-test-installer:
-  en: eeba13348f6c7349
-  zh: 1fd4ac5f83ab5242
-/puregamma-harness-desktop/package/windows-installer-interface:
-  en: 1fc1db8f54475c8f
-  zh: dd834ed206070396
-/puregamma-harness-desktop/package/windows-ev-signing:
-  en: 64836513eb7eda6e
-  zh: 6ebb9184a7aa51de
-/puregamma-harness-desktop/package/desktop-runtime-preparation:
-  en: 9a71990bee9867a7
-  zh: 76c5c1fdff6e6908
+  en: ac31ebdd9de54f34
+  zh: 921e534d5c4b3a16
+/puregamma-harness-desktop/windows-installer-interface:
+  en: 8cb4b7babbd8714d
+  zh: b4aebc1d2d152e01
 /puregamma-harness-desktop/updates:
-  en: 41d0f50eb7173342
-  zh: ce940ef3cbcc6fa5
+  en: 4788b6b60489ef92
+  zh: 6312c5590efa27f1
 /puregamma-harness-desktop/updates/local-desktop-settings:
   en: 2e57457c44c85b5f
   zh: 5b8510a3dc4c6c9d
@@ -78,14 +66,14 @@
   en: 54596bef0706d305
   zh: 48737302dcf3c939
 /puregamma-harness-desktop/updates/local-updater-qualification:
-  en: bc50fd8a4d96c227
-  zh: fb0a6ce80c31cda6
+  en: 68ec2f8bd5763ea6
+  zh: 23b932dfe8503602
 /puregamma-harness-desktop/low-level-development-overrides:
-  en: 0b225f914142ef0b
-  zh: 9ffd07768d37824e
+  en: 8264b135871e8978
+  zh: 0939aafb1b2961fc
 /puregamma-harness-desktop/known-limitations:
-  en: 5b77213c86bbcfb6
-  zh: b34bf21773bb852b
+  en: c63d4dc7a9104954
+  zh: a4c676e5b46a6ac0
 /puregamma-harness-desktop/dev-note:
   en: 8e26b460ba31f21b
   zh: fbcd0307b3867125

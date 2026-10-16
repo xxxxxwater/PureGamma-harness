@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-安装适合本机的版本、添加内置插件能力，并继续使用原有本地 Harness 数据。此定制版本为 `puregamma-harness-v0.1.0`；实际引擎版本为 `0.2.1-alpha.2`。
+安装适合本机的版本、添加内置插件能力，并继续使用原有本地 Harness 数据。当前源码构建的 PureGamma Harness 使用上游 `0.2.1-alpha.4` 引擎。
 
 <a id="installation"></a>
 

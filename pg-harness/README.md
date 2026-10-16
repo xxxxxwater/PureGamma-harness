@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Install the release for your computer, add the bundled plugin capabilities, and continue using your existing local Harness data. The edition release is `puregamma-harness-v0.1.0`; the actual engine version is `0.2.1-alpha.2`.
+Install the release for your computer, add the bundled plugin capabilities, and continue using your existing local Harness data. This source builds PureGamma Harness with upstream engine `0.2.1-alpha.4`.
 
 <a id="installation"></a>
 
