@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { test } from 'node:test'
 import {
-  patchAtFile, patchAtFileClient, patchMagicPath, patchBillionContext, patchBetterSidebar, installBundledPluginCompatibility,
+  patchAtFile, patchAtFileClient, patchMagicPath, patchBillionContext, patchBetterSidebar, patchSentinelXManifest, installBundledPluginCompatibility,
 } from './bundled-compat.mjs'
 
 function archiveContent(name, path) {
@@ -231,7 +231,7 @@ test('installation backs up originals once and never patches different versions'
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
-test('SentinelX alpha.4 compatibility retains bridge code, OAuth state, dependency sources and custom policies', () => {
+test('SentinelX alpha.4/alpha.5 compatibility retains bridge code, OAuth state, dependency sources and custom policies', () => {
   const home = mkdtempSync(join(tmpdir(), 'pg-sentinelx-compat-'))
   try {
     const profile = join(home, 'profiles', 'desktop')
@@ -250,6 +250,10 @@ test('SentinelX alpha.4 compatibility retains bridge code, OAuth state, dependen
     const fixed = JSON.parse(readFileSync(manifestPath, 'utf8'))
     const prior = JSON.parse(original)
     assert.ok(fixed.engines.dsh.includes('0.2.1-alpha.4'))
+    assert.ok(fixed.engines.dsh.includes('0.2.1-alpha.5'))
+    for (const name of ['@deepseek-ai/dsh-mcp-client', '@deepseek-ai/dsh-tools']) {
+      assert.ok(fixed.peerDependencies[name].includes('0.2.1-alpha.5'))
+    }
     assert.ok(fixed.engines.dsh.includes('0.2.1-alpha.2'))
     assert.equal(fixed.engines.node, prior.engines.node)
     assert.deepEqual(fixed.dependencies, prior.dependencies)
@@ -266,4 +270,31 @@ test('SentinelX alpha.4 compatibility retains bridge code, OAuth state, dependen
       assert.equal(readFileSync(manifestPath, 'utf8'), custom)
     }
   } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+
+test('SentinelX upgrades an existing alpha.4 repair to alpha.5 without widening unknown custom policy', () => {
+  const original = JSON.parse(archiveContent('dsh-sentinelx-0.1.1.tgz', 'package.json'))
+  const alpha4 = original.peerDependencies['@deepseek-ai/dsh-tools'] + ' || 0.2.1-alpha.4'
+  const peers = ['@deepseek-ai/dsh-mcp-client', '@deepseek-ai/dsh-tools']
+  const existing = {
+    ...original,
+    engines: { ...original.engines, dsh: alpha4 },
+    peerDependencies: { ...original.peerDependencies },
+    devDependencies: { ...original.devDependencies },
+  }
+  for (const name of peers) {
+    existing.peerDependencies[name] = alpha4
+    if (existing.devDependencies[name] !== undefined) existing.devDependencies[name] = alpha4
+  }
+  const upgraded = JSON.parse(patchSentinelXManifest(JSON.stringify(existing)))
+  assert.equal(upgraded.engines.dsh, alpha4 + ' || 0.2.1-alpha.5')
+  for (const name of peers) {
+    assert.equal(upgraded.peerDependencies[name], upgraded.engines.dsh)
+    if (existing.devDependencies[name] !== undefined) assert.equal(upgraded.devDependencies[name], upgraded.engines.dsh)
+  }
+  assert.equal(patchSentinelXManifest(JSON.stringify(upgraded)), JSON.stringify(upgraded))
+  const custom = { ...existing, peerDependencies: { ...existing.peerDependencies, [peers[0]]: 'custom-policy' } }
+  const serialized = JSON.stringify(custom)
+  assert.equal(patchSentinelXManifest(serialized), serialized)
 })
