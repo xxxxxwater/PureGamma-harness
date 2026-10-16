@@ -67,4 +67,8 @@ jobs:
       - name: Publish the package to the linked repository
         env:
           NODE_AUTH_TOKEN: ${{ github.token }}
-        run: npm publish ./package/xxxxxwater-puregamma-harness-0.2.1-alpha.4.tgz --ignore-scripts --access public --registry https://npm.pkg.github.com
+        run: npm publish ./package/xxxxxwater-puregamma-harness-0.2.1-alpha.4.tgz --ignore-scripts --access public --tag latest --registry https://npm.pkg.github.com
+      - name: Verify the published package version and integrity metadata
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: npm view @xxxxxwater/puregamma-harness@0.2.1-alpha.4 version dist.shasum dist.integrity --registry https://npm.pkg.github.com --json
