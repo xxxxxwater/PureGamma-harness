@@ -230,3 +230,40 @@ test('installation backs up originals once and never patches different versions'
     assert.throws(() => patchBillionContext('unexpected code'), /patch anchor/)
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
+
+test('SentinelX alpha.4 compatibility retains bridge code, OAuth state, dependency sources and custom policies', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-sentinelx-compat-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    const root = join(profile, 'node_modules', 'dsh-sentinelx')
+    const backup = join(home, 'backup')
+    mkdirSync(join(root, 'lib'), { recursive: true })
+    const original = archiveContent('dsh-sentinelx-0.1.1.tgz', 'package.json')
+    const bridge = archiveContent('dsh-sentinelx-0.1.1.tgz', 'lib/index.js')
+    const manifestPath = join(root, 'package.json')
+    writeFileSync(manifestPath, original)
+    writeFileSync(join(root, 'lib', 'index.js'), bridge)
+    mkdirSync(join(home, 'sentinelx'))
+    const state = join(home, 'sentinelx', 'oauth.json')
+    writeFileSync(state, '{"fixture_token":"retained"}\n')
+    assert.deepEqual(installBundledPluginCompatibility(profile, backup), ['dsh-sentinelx'])
+    const fixed = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    const prior = JSON.parse(original)
+    assert.ok(fixed.engines.dsh.includes('0.2.1-alpha.4'))
+    assert.ok(fixed.engines.dsh.includes('0.2.1-alpha.2'))
+    assert.equal(fixed.engines.node, prior.engines.node)
+    assert.deepEqual(fixed.dependencies, prior.dependencies)
+    assert.equal(readFileSync(join(root, 'lib', 'index.js'), 'utf8'), bridge)
+    assert.equal(readFileSync(state, 'utf8'), '{"fixture_token":"retained"}\n')
+    assert.equal(readFileSync(join(backup, 'dsh-sentinelx-package.json'), 'utf8'), original)
+    assert.deepEqual(installBundledPluginCompatibility(profile, backup), [])
+    assert.equal(readFileSync(join(backup, 'dsh-sentinelx-package.json'), 'utf8'), original)
+    for (const override of [{ version: '0.1.2' }, { engines: { ...prior.engines, dsh: '0.2.1-alpha.2' } },
+      { peerDependencies: { ...prior.peerDependencies, '@deepseek-ai/dsh-tools': 'custom-policy' } }]) {
+      const custom = JSON.stringify({ ...prior, ...override }) + '\n'
+      writeFileSync(manifestPath, custom)
+      assert.deepEqual(installBundledPluginCompatibility(profile, backup), [])
+      assert.equal(readFileSync(manifestPath, 'utf8'), custom)
+    }
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})

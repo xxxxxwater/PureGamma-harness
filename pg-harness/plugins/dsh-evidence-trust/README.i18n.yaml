@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write pg-harness/plugins/dsh-evidence-trust/README.md
+/puregamma-evidence-trust-v0-2-0:
+  en: 2ac05a473f428325
+  zh: c86b67460e4f69db
+/puregamma-evidence-trust-v0-2-0/compatibility-and-secure-defaults:
+  en: 404f6a326862614a
+  zh: 8d8a2d374c214e0c
+/puregamma-evidence-trust-v0-2-0/compatibility-and-secure-defaults/release-proof:
+  en: b56f54a04ed762a4
+  zh: eb49c800aa694615
+/puregamma-evidence-trust-v0-2-0/compatibility-and-secure-defaults/trading-proof:
+  en: b064cf06f82065b0
+  zh: 29ac9ebf637b790d
+/puregamma-evidence-trust-v0-2-0/compatibility-and-secure-defaults/cross-session-evidence-and-unknowns:
+  en: 4fb6ded4681f72c3
+  zh: 9c36f56a2395aeb6
+/puregamma-evidence-trust-v0-2-0/configuration-examples:
+  en: 1629fa9353288475
+  zh: 72a6e07cb336ed12
+/puregamma-evidence-trust-v0-2-0/ci-signing-procedure:
+  en: cd5bf433de2c1e91
+  zh: 67f7e2769a3cd94b
+/puregamma-evidence-trust-v0-2-0/agent-facing-tools:
+  en: 6838e879fceda962
+  zh: 7db7d0402d96f5d0
+/puregamma-evidence-trust-v0-2-0/tests-and-rollout:
+  en: 4fcd548dc859e41b
+  zh: 0e91da2fe1e134bc

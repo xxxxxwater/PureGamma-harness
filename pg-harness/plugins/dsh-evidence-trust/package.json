@@ -1,0 +1,30 @@
+{
+  "name": "dsh-evidence-trust",
+  "version": "0.2.0",
+  "description": "Signed CI/trading Verification Gate with content-addressed cross-session Evidence Ledger and Unknown Registry",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "ledger.mjs",
+    "attestations.mjs",
+    "signed-gate.mjs",
+    "sign-attestation.mjs",
+    "verify-ci-and-sign.mjs",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

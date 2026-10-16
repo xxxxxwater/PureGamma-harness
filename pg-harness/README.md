@@ -27,6 +27,7 @@ The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin ar
 
 | Package | Capability and setup |
 | --- | --- |
+| [`dsh-evidence-trust`](plugins/dsh-evidence-trust/README.md) | Session-scoped hash-chained tool Evidence Ledger, Unknown Registry, and an opt-in fail-closed Verification Gate. Audit-only by default; never stores raw tool outputs. |
 | [`dsh-codex-cli-models`](plugins/dsh-codex-cli-models/README.md) | Use locally authenticated Codex models with Harness history and tools; sign in through Settings → Codex CLI. |
 | [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.md) | Play one chime per successful top-level turn on macOS. |
 | `dsh-context` | Inspect how the context is composed and how it changes. |
@@ -50,6 +51,8 @@ The installer also applies version-scoped compatibility patches to the shipped `
 The installer adds a preview compatibility fix to the bundled `dsh-univer-office` 0.3.7 client. Native calls and nested code-tool calls now populate conversation review cards and live windows; open `.univer` files in the right sidebar for the file viewer. The fix subscribes to the current turn's Chat tool source, so nested call results appear without a full conversation refresh. It preserves plugin settings and dependency pins, backs up the original client, and refuses an unrecognized 0.3.7 build; other versions are left unchanged. The readable implementation is under `plugin-patches/univer-office`.
 
 The bundled Better Sidebar 0.25.0 terminal uses the current Connection service and retains its Host/Origin checks, including native-shell WebSocket support. The installer applies the version-specific repair after dependency installation and backs up the original entry point.
+
+SentinelX 0.1.1 declares support for alpha.4 after its unchanged bridge passes the current Harness API checks. The installer backs up its manifest and extends only the known peer ranges, retaining its dependency versions, linked source, OAuth state, and any explicit custom compatibility policy.
 
 <a id="build-and-verify"></a>
 

@@ -134,7 +134,26 @@ const PATCHES = [
   { name: 'dsh-magicpath', version: '0.1.0', path: 'lib/index.js', backup: 'dsh-magicpath-index.js', patch: patchMagicPath },
   { name: 'billion-context', version: '0.1.190', path: 'dist/agent/dsh-native.js', backup: 'billion-context-dsh-native.js', patch: patchBillionContext },
   { name: 'dsh-better-sidebar', version: '0.25.0', path: 'lib/index.js', backup: 'dsh-better-sidebar-index.js', patch: patchBetterSidebar },
+  { name: 'dsh-sentinelx', version: '0.1.1', path: 'package.json', backup: 'dsh-sentinelx-package.json', patch: patchSentinelXManifest },
 ]
+
+/** Declare alpha.4 support for the unchanged SentinelX bridge without replacing custom compatibility policies. */
+export function patchSentinelXManifest(source) {
+  const manifest = JSON.parse(source)
+  if (manifest.name !== 'dsh-sentinelx' || manifest.version !== '0.1.1') return source
+  const previous = '0.2.0-rc.1 || 0.2.0-rc.2 || 0.2.1-alpha.1 || 0.2.1-alpha.2'
+  const supported = previous + ' || 0.2.1-alpha.4'
+  const peers = ['@deepseek-ai/dsh-mcp-client', '@deepseek-ai/dsh-tools']
+  if (manifest.engines?.dsh !== undefined && manifest.engines.dsh !== supported) return source
+  if (peers.some(name => ![previous, supported].includes(manifest.peerDependencies?.[name]))) return source
+  if (manifest.engines?.dsh === supported && peers.every(name => manifest.peerDependencies[name] === supported)) return source
+  manifest.engines = { ...manifest.engines, dsh: supported }
+  for (const name of peers) {
+    manifest.peerDependencies[name] = supported
+    if (manifest.devDependencies?.[name] === previous) manifest.devDependencies[name] = supported
+  }
+  return JSON.stringify(manifest, null, 2) + '\n'
+}
 
 /** Restore Sidebar routes after webRuntime was replaced by the Connection service.
  * Preserve the upstream Host/Origin fence, including its native-shell WebSocket

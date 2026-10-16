@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installUniverPreviewBridge } from './plugin-patches/univer-office/patch.mjs'
 import { installBundledPluginCompatibility } from './plugin-patches/bundled-compat.mjs'
+import { selectReaBundle } from './rea-plugin.mjs'
 
 /**
  * Install PureGamma UI packages into the reserved desktop profile with reversible backups.
@@ -35,7 +36,7 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
   manifest.dsh.profile.bundles ??= ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
   // Both generations register codex-cli; keep the old dependency for rollback but mount only the native adapter.
   manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter(name => name !== 'dsh-codex-cli')
-  const localPlugins = ['dsh-plugin-rail', 'dsh-vscode-code-theme', 'dsh-imessage-blue', 'dsh-pixel-font', 'dsh-codex-cli-models']
+  const localPlugins = ['dsh-plugin-rail', 'dsh-vscode-code-theme', 'dsh-imessage-blue', 'dsh-pixel-font', 'dsh-codex-cli-models', 'dsh-evidence-trust']
   if (process.platform === 'darwin') localPlugins.push('dsh-task-completion-chime')
   for (const name of localPlugins) {
     const destination = join(home, 'local-plugins', name)
@@ -70,6 +71,9 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
       if (!manifest.dsh.profile.bundles.includes(bundle)) manifest.dsh.profile.bundles.push(bundle)
     }
   }
+  // REA is distributed as a standalone, build-free Harness plugin. Installing
+  // the npm dependency alone does not activate its Cordis layer.
+  selectReaBundle(manifest)
   const pending = manifestPath + '.pg-pending'
   writeFileSync(pending, JSON.stringify(manifest, null, 2) + '\n', { mode: 0o600 })
   renameSync(pending, manifestPath)

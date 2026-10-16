@@ -49,7 +49,11 @@ export function findRepositoryReferences(
     if (organizationUrl.test(canonicalReferenceText(line).replace(kitRepositoryUrl, ''))) {
       references.push({ file, line: index + 1, kind: 'organization-url' })
     }
-    if ([...line.matchAll(commitCandidate)].some(match => commits.has(match[0].toLowerCase()))) {
+    // A generated TOML archive size is a decimal byte count, even when it coincides with a Git prefix.
+    const referenceLine = file.endsWith('/uv.lock')
+      ? line.replace(/([,{]\s*size\s*=\s*)\d+(?=\s*[,}])/g, '$1<bytes>')
+      : line
+    if ([...referenceLine.matchAll(commitCandidate)].some(match => commits.has(match[0].toLowerCase()))) {
       references.push({ file, line: index + 1, kind: 'commit-hash' })
     }
   }

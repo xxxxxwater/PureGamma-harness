@@ -27,6 +27,7 @@
 
 | 插件 | 能力与配置 |
 | --- | --- |
+| [`dsh-evidence-trust`](plugins/dsh-evidence-trust/README.zh.md) | 基于会话的哈希链 Evidence Ledger、Unknown Registry 和可选择启用的强制 Verification Gate；默认仅审计，不存储原始工具输出。 |
 | [`dsh-codex-cli-models`](plugins/dsh-codex-cli-models/README.zh.md) | 使用本机 Codex 登录调用模型，支持 Harness 历史和工具；在设置 → Codex CLI 中登录。 |
 | [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.zh.md) | macOS 上每次主会话任务正常完成后播放一次提示音。 |
 | `dsh-context` | 查看上下文构成及其变化。 |
@@ -50,6 +51,8 @@ Codex 模型插件要求本机安装官方 Codex CLI。每位用户都需在浏�
 安装程序为内置 `dsh-univer-office` 0.3.7 客户端加入预览兼容修复。原生调用和嵌套代码工具调用均可生成会话审阅卡片与实时窗口；在右侧边栏打开 `.univer` 文件即可使用文件预览。修复订阅当前轮次的 Chat 工具数据源，因此嵌套调用结果无需刷新整个会话即可显示。插件设置与依赖版本保持不变，原客户端会备份；无法识别的 0.3.7 构建会拒绝修改，其他版本保持原样。可读实现位于 `plugin-patches/univer-office`。
 
 内置 Better Sidebar 0.25.0 的终端使用新版 Connection 服务，保留 Host/Origin 检查和本机桌面 WebSocket 支持。安装器在依赖安装完成后应用对应版本的修复，并备份原始入口文件。
+
+SentinelX 0.1.1 的原有桥接代码通过当前 Harness API 检查后，声明支持 alpha.4。安装器备份其清单并仅扩展已知的 peer 版本范围，保留依赖版本、本地链接来源、OAuth 状态和显式自定义的兼容策略。
 
 <a id="build-and-verify"></a>
 
