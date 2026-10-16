@@ -1,0 +1,59 @@
+name: PureGamma alpha4 Windows x64 installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: 67436bb15f1a3bf01429797fd373dec0ba4f76e4
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/puregamma-pnpm
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          exit $LASTEXITCODE
+      - name: Build Windows x64 installer
+        run: |
+          pnpm run package:desktop:win:x64:unsigned
+          exit $LASTEXITCODE
+      - name: Stage installer
+        run: |
+          New-Item -ItemType Directory -Path release-assets | Out-Null
+          $installers = @(Get-ChildItem apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe)
+          if ($installers.Count -ne 1) { throw 'Expected one Windows x64 installer' }
+          Copy-Item -LiteralPath $installers[0].FullName -Destination release-assets/puregamma-harness-v0.2.1-alpha.4-windows-x64.exe
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: puregamma-alpha4-windows-x64
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Retain packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: puregamma-alpha4-windows-diagnostics
+          path: apps/desktop/.desktop-build/packaging-runs/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
