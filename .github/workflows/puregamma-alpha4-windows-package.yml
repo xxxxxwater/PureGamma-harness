@@ -1,0 +1,33 @@
+name: Publish PureGamma alpha4 Windows package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: oras-project/setup-oras@v2.0.1
+        with:
+          version: 1.3.4
+      - name: Download published Windows installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release download puregamma-harness-v0.2.1-alpha.4-complete --pattern puregamma-harness-v0.2.1-alpha.4-windows-x64.exe --dir package
+      - name: Publish Windows installer to GitHub Packages
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GHCR_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          oras push ghcr.io/xxxxxwater/puregamma-harness-windows-x64:0.2.1-alpha.4 \
+            --artifact-type application/vnd.puregamma.harness.windows-installer.v1 \
+            --annotation org.opencontainers.image.source=https://github.com/xxxxxwater/PureGamma-harness \
+            --annotation org.opencontainers.image.version=0.2.1-alpha.4 \
+            --annotation 'org.opencontainers.image.title=PureGamma Harness Windows x64 installer' \
+            package/puregamma-harness-v0.2.1-alpha.4-windows-x64.exe:application/vnd.microsoft.portable-executable
