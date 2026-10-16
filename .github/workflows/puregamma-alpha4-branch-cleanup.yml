@@ -1,0 +1,23 @@
+name: Remove merged alpha.4 sync branch
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/puregamma-alpha4-branch-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  remove-merged-branch:
+    if: github.repository == 'xxxxxwater/PureGamma-harness'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete only the merged alpha.4 sync branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/sync/upstream-alpha4-20261016"
+          echo "Removed sync/upstream-alpha4-20261016 (backup branch was untouched)"
