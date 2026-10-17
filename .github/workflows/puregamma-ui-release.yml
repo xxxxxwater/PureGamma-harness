@@ -8,6 +8,11 @@ on:
         required: true
         default: 0.2.1-alpha.5
         type: string
+      publish_only:
+        description: Publish the already verified installers from the release
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: puregamma-ui-release-${{ inputs.version }}
@@ -16,6 +21,7 @@ concurrency:
 jobs:
   windows:
     name: Build and verify Windows x64
+    if: ${{ !inputs.publish_only }}
     runs-on: windows-2025
     timeout-minutes: 120
     permissions:
@@ -87,10 +93,12 @@ jobs:
   desktop-package:
     name: Publish Windows and macOS in GitHub Packages
     needs: windows
+    if: ${{ always() && (needs.windows.result == 'success' || inputs.publish_only) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
-      contents: read
+      # GitHub restricts draft release access to repository writers.
+      contents: write
       packages: write
     env:
       RELEASE_VERSION: ${{ inputs.version }}
