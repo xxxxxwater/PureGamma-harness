@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({ id: 'dsh-plugin-rail', factory: () => ({
    'billion-context':['infinity','长上下文'], 'dsh-context':['context','上下文洞察','上下文洞察'],
    'dsh-ego-browser':['globe','浏览器自动化'], 'dsh-sentinelx':['link','SentinelX 连接'],
    'dshmarket':['store','插件市场'], 'open-sea-skin':['waves','海洋皮肤'], 'dsh-magicpath':['design','MagicPath 设计'],
-   'dsh-pixel-font':['title','像素字体'], 'dsh-vscode-code-theme':['code','代码配色'], 'dsh-imessage-blue':['palette','聊天配色'],
+   'dsh-pixel-font':['title','像素字体'], 'dsh-vscode-code-theme':['code','代码配色'], 'dsh-imessage-blue':['palette','聊天配色'], 'dsh-quiet-workspace':['palette','简洁工作空间'],
    '@deepseek-ai/dsh-experimental-agent-team-profile':['team','智能体团队'],
    '@deepseek-ai/dsh-experimental-auto-review':['shield','自动授权审查'],
    '@deepseek-ai/dsh-experimental-inspector-profile':['inspect','开发者工具'],
@@ -61,41 +61,43 @@ window.__ModuleLoader__.load({ id: 'dsh-plugin-rail', factory: () => ({
    '@deepseek-ai/dsh-subagent-claude-code':['agent','Claude Code 子智能体']
   };
   ctx.effect(() => {
-   let disposed=false, generation=0, selectedPlugin=null, hoverTimer, inventory=[];
+   let disposed=false, generation=0, selectedPlugin=null, hoverTimer, inventory=[], menuOwner=null, frame=0, query='';
    const pinKey='dsh-plugin-rail:pinned:v1';
    let pins;
    try{pins=new Set(JSON.parse(localStorage.getItem(pinKey)||'null')||['dsh-context','@linxin666/dsh-client-ui-skill-explorer','dshmarket','dsh-univer-office']);}catch{pins=new Set();}
    const svg=icon=>'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+icons[icon]+'</svg>';
    const style=document.createElement('style'); style.id='dsh-plugin-rail-style';
-   style.textContent=`body #root{margin-left:56px;width:calc(100% - 56px)}
-    #dsh-plugin-rail{position:fixed;inset:48px auto 0 0;width:56px;box-sizing:border-box;z-index:120;background:var(--dsw-specific-sidebar-fill);border-right:1px solid var(--dsw-alias-border-l3);display:flex;flex-direction:column;align-items:center;padding:8px 4px 10px;gap:5px;-webkit-app-region:no-drag}
-    #dsh-plugin-rail button{width:38px;height:38px;flex-shrink:0;display:grid;place-items:center;padding:0;border:0;border-radius:11px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;transition:background .15s,color .15s;-webkit-app-region:no-drag}
-    #dsh-plugin-rail button:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-    #dsh-plugin-rail button[aria-current=page]{background:color-mix(in srgb,#0a64d8 15%,transparent);color:#2485ed}
-    #dsh-plugin-rail button:focus-visible{outline:2px solid #2485ed;outline-offset:1px}
-    #dsh-plugin-rail button[data-disabled=true]{opacity:.45}
-    #dsh-plugin-rail svg{width:20px;height:20px;pointer-events:none}
-    #dsh-plugin-rail .rail-plugins{width:100%;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;align-items:center;gap:4px;scrollbar-width:thin;flex:1;padding:5px 0}
-    #dsh-plugin-rail .rail-divider{height:1px;width:26px;flex-shrink:0;background:var(--dsw-alias-border-l3);margin:3px 0}
-    #dsh-plugin-rail .rail-status{position:absolute;left:64px;bottom:16px;max-width:280px;padding:10px 14px;border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-shadow:0 2px 16px #0003;font-size:12px}
+   style.textContent=`
+    #dsh-plugin-rail{display:flex;flex:none;flex-direction:column;margin:8px 2px 0;padding:0;gap:2px;color:var(--dsw-alias-label-primary);font-size:13px;-webkit-app-region:no-drag}
+    #dsh-plugin-rail>button[data-rail-id=sidebar-toggle],#dsh-plugin-rail>button[data-rail-id=new-session],#dsh-plugin-rail>button[data-rail-id=conversation],#dsh-plugin-rail>button[data-rail-id=plugins]{display:none}
+    #dsh-plugin-rail .rail-heading{padding:7px 12px 5px;color:var(--dsw-alias-label-secondary);font-size:11px;font-weight:500}
+    #dsh-plugin-rail button{position:relative;display:flex;align-items:center;gap:10px;min-height:34px;width:100%;padding:7px 12px;border:0;border-radius:9px;background:transparent;color:inherit;text-align:left;cursor:pointer;-webkit-app-region:no-drag}
+    #dsh-plugin-rail button:hover,#dsh-plugin-rail button[aria-current=page]{background:var(--dsw-alias-interactive-bg-hover)}
+    #dsh-plugin-rail button:focus-visible,#dsh-plugin-rail-menu button:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:-2px}
+    #dsh-plugin-rail button[data-disabled=true]{opacity:.6}
+    #dsh-plugin-rail svg{width:17px;height:17px;flex:none;pointer-events:none}
+    #dsh-plugin-rail .rail-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #dsh-plugin-rail .rail-plugins{display:flex;flex-direction:column;gap:2px}
+    #dsh-plugin-rail .rail-plugins button[hidden]{display:none}
+    #dsh-plugin-rail .rail-divider{display:none}
+    #dsh-plugin-rail .rail-status{padding:8px 12px;font-size:11px;color:var(--dsw-alias-label-secondary)}
     #dsh-plugin-rail .rail-status:empty{display:none}
-    #dsh-plugin-rail-tooltip{position:fixed;z-index:10000;max-width:min(350px,calc(100vw - 80px));padding:10px 13px;border:1px solid var(--dsw-alias-border-l3);border-radius:12px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-shadow:0 6px 24px #0003;pointer-events:none;font-size:13px;line-height:1.5}
-    #dsh-plugin-rail-tooltip[hidden]{display:none}
-    #dsh-plugin-rail button[data-pinned=true]::after{content:'';position:absolute;width:4px;height:4px;border-radius:50%;background:#2485ed;right:5px;top:5px}
-    #dsh-plugin-rail button{position:relative}
-    #dsh-plugin-rail-menu{position:fixed;left:64px;bottom:16px;z-index:9999;width:min(360px,calc(100vw - 80px));max-height:calc(100vh - 96px);overflow:auto;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l3);border-radius:14px;padding:8px;box-shadow:0 8px 32px #0004;font-size:13px}
-    #dsh-plugin-rail-menu[hidden]{display:none}
-    #dsh-plugin-rail-menu header{padding:8px 10px;font-weight:600}
-    #dsh-plugin-rail-menu .plugin-row{display:flex;align-items:center;gap:4px;border-radius:8px}
+    #dsh-plugin-rail-tooltip{position:fixed;z-index:10000;max-width:min(320px,calc(100vw - 32px));padding:10px 13px;border:1px solid var(--dsw-alias-border-l3);border-radius:12px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-shadow:0 6px 24px #0002;pointer-events:none;font-size:12px;line-height:1.5}
+    #dsh-plugin-rail-tooltip[hidden],#dsh-plugin-rail-menu[hidden]{display:none}
+    #dsh-plugin-rail-menu{position:fixed;z-index:9999;width:min(360px,calc(100vw - 32px));max-height:calc(100vh - 90px);overflow:auto;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l3);border-radius:16px;padding:8px;box-shadow:0 12px 40px #0003;font-size:13px;-webkit-app-region:no-drag}
+    #dsh-plugin-rail-menu header{padding:8px 10px;font-size:12px;font-weight:600}
+    #dsh-plugin-rail-menu input{box-sizing:border-box;width:calc(100% - 12px);margin:2px 6px 8px;padding:9px 10px;border:1px solid var(--dsw-alias-border-l3);border-radius:8px;background:transparent;color:inherit;font:inherit}
+    #dsh-plugin-rail-menu .plugin-row{display:flex;align-items:center;gap:4px;border-radius:9px}
+    #dsh-plugin-rail-menu .plugin-row[hidden]{display:none}
     #dsh-plugin-rail-menu .plugin-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
     #dsh-plugin-rail-menu button{border:0;background:transparent;color:inherit;cursor:pointer;border-radius:8px;padding:8px;display:flex;align-items:center;gap:10px;text-align:left}
-    #dsh-plugin-rail-menu button:focus-visible{outline:2px solid #2485ed}
     #dsh-plugin-rail-menu .plugin-open{flex:1;min-width:0}
-    #dsh-plugin-rail-menu svg{width:18px;height:18px;flex-shrink:0}
+    #dsh-plugin-rail-menu svg{width:17px;height:17px;flex:none}
     #dsh-plugin-rail-menu small{display:block;color:var(--dsw-alias-label-secondary);font-size:10px;overflow-wrap:anywhere}
-    #dsh-plugin-rail-menu button[aria-pressed=true]{color:#2485ed;background:color-mix(in srgb,#0a64d8 12%,transparent)}
-    #dsh-plugin-rail-tooltip strong{display:block;font-size:13px;font-weight:600}
-    #dsh-plugin-rail-tooltip small{display:block;margin-top:3px;font-size:11px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}`;
+    #dsh-plugin-rail-menu button[aria-pressed=true]{background:var(--dsw-alias-interactive-bg-hover)}
+    #dsh-plugin-rail-tooltip strong{display:block;font-size:12px;font-weight:600}
+    #dsh-plugin-rail-tooltip small{display:block;margin-top:3px;font-size:10px;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
+    [data-slot=sidebar] [class*=_collapsed] #dsh-plugin-rail{display:none}`;
    document.head.append(style);
    const nav=document.createElement('nav'); nav.id='dsh-plugin-rail';nav.setAttribute('aria-label','插件能力导航');
    const status=document.createElement('div');status.className='rail-status';status.setAttribute('role','status');
@@ -105,11 +107,12 @@ window.__ModuleLoader__.load({ id: 'dsh-plugin-rail', factory: () => ({
    const hideTip=()=>{clearTimeout(hoverTimer);tooltip.hidden=true;for(const button of nav.querySelectorAll('[aria-describedby]'))button.removeAttribute('aria-describedby');};
    const showTip=button=>{hideTip();hoverTimer=setTimeout(()=>{
     if(disposed)return;tipTitle.textContent=button.dataset.tooltipTitle||button.getAttribute('aria-label');tipDetail.textContent=button.dataset.tooltipDetail||'';tipDetail.hidden=!tipDetail.textContent;
-    tooltip.hidden=false;const rect=button.getBoundingClientRect();tooltip.style.left='64px';tooltip.style.top=Math.max(8,Math.min(rect.top,window.innerHeight-tooltip.offsetHeight-8))+'px';button.setAttribute('aria-describedby',tooltip.id);
+    tooltip.hidden=false;const rect=button.getBoundingClientRect();tooltip.style.left=Math.min(rect.right+12,window.innerWidth-tooltip.offsetWidth-8)+'px';tooltip.style.top=Math.max(8,Math.min(rect.top,window.innerHeight-tooltip.offsetHeight-8))+'px';button.setAttribute('aria-describedby',tooltip.id);
    },180);};
    const make=(id,icon,label,action)=>{
     const button=document.createElement('button');button.type='button';button.dataset.railId=id;button.dataset.tooltipTitle=label;button.setAttribute('aria-label',label);
     button.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(icons[icon]||icons.puzzle)+'</svg>';
+    const caption=document.createElement('span');caption.className='rail-label';caption.textContent=label;button.append(caption);
     button.addEventListener('mouseenter',()=>showTip(button));button.addEventListener('mouseleave',hideTip);button.addEventListener('focus',()=>showTip(button));button.addEventListener('blur',hideTip);
     button.addEventListener('click',()=>{hideTip();report('');Promise.resolve().then(action).catch(()=>report('暂时无法打开此入口，请在插件页查看。'));});return button;
    };
@@ -117,23 +120,32 @@ window.__ModuleLoader__.load({ id: 'dsh-plugin-rail', factory: () => ({
    nav.append(make('new-session','plus','新会话',()=>ctx.get('uiWorkspace').startSession()));
    const conversation=make('conversation','chat','返回对话',()=>{selectedPlugin=null;ctx.layout.selectPanel(null);});nav.append(conversation);
    const divider=document.createElement('div');divider.className='rail-divider';nav.append(divider);
+   const heading=document.createElement('div');heading.className='rail-heading';heading.textContent='已置顶';nav.append(heading);
    const list=document.createElement('div');list.className='rail-plugins';nav.append(list);
    const menu=document.createElement('div');menu.id='dsh-plugin-rail-menu';menu.hidden=true;menu.setAttribute('aria-label','插件预览与置顶');document.body.append(menu);
-   const more=make('more','more','更多插件 · 预览与置顶',()=>{hideTip();menu.hidden=!menu.hidden;more.setAttribute('aria-expanded',String(!menu.hidden));if(!menu.hidden)renderMenu();});more.setAttribute('aria-expanded','false');more.setAttribute('aria-controls',menu.id);nav.append(more);
-   const closeMenu=()=>{menu.hidden=true;more.setAttribute('aria-expanded','false');};
-   const sortRail=()=>{for(const b of [...list.children].sort((a,b)=>Number(pins.has(b.dataset.plugin))-Number(pins.has(a.dataset.plugin)))){b.dataset.pinned=String(pins.has(b.dataset.plugin));list.append(b);}};
+   const positionMenu=owner=>{const rect=owner.getBoundingClientRect();menu.style.left=Math.min(Math.max(8,rect.left),window.innerWidth-menu.offsetWidth-8)+'px';menu.style.top=Math.min(rect.bottom+6,window.innerHeight-menu.offsetHeight-8)+'px';};
+   const openMenu=owner=>{hideTip();menuOwner?.setAttribute('aria-expanded','false');query='';menuOwner=owner;menu.hidden=false;owner.setAttribute('aria-expanded','true');renderMenu();positionMenu(owner);menu.querySelector('input')?.focus();};
+   const more=make('more','more','更多插件',()=>{if(!menu.hidden&&menuOwner===more)closeMenu();else openMenu(more);});more.setAttribute('aria-expanded','false');more.setAttribute('aria-controls',menu.id);nav.append(more);
+   const closeMenu=restore=>{menu.hidden=true;menuOwner?.setAttribute('aria-expanded','false');if(restore)menuOwner?.focus();};
+   const sortRail=()=>{let visible=0;for(const b of [...list.children].sort((a,b)=>Number(pins.has(b.dataset.plugin))-Number(pins.has(a.dataset.plugin)))){b.dataset.pinned=String(pins.has(b.dataset.plugin));b.hidden=!pins.has(b.dataset.plugin)||Boolean(b.dataset.panel)||visible>=4;if(!b.hidden)visible++;list.append(b);}heading.hidden=visible===0;};
    const togglePin=name=>{if(pins.has(name))pins.delete(name);else pins.add(name);try{localStorage.setItem(pinKey,JSON.stringify([...pins]));}catch{report('置顶已生效，但此设备暂时无法保存设置。');}sortRail();renderMenu();};
    const renderMenu=()=>{
-    menu.replaceChildren();const header=document.createElement('header');header.textContent='插件预览 · '+pins.size+' 个置顶';menu.append(header);
+    menu.replaceChildren();const header=document.createElement('header');header.textContent='插件 · '+pins.size+' 个置顶';menu.append(header);
+    const search=document.createElement('input');search.type='search';search.placeholder='搜索插件';search.setAttribute('aria-label','搜索插件');search.value=query;search.addEventListener('input',()=>{query=search.value;filterMenu();});menu.append(search);
     const ordered=[...inventory].sort((a,b)=>Number(pins.has(b.name))-Number(pins.has(a.name)));
-    for(const bundle of ordered){const [icon,label]=map[bundle.name]||['puzzle',bundle.name];const row=document.createElement('div');row.className='plugin-row';
+    for(const bundle of ordered){const [icon,label]=map[bundle.name]||['puzzle',bundle.name];const row=document.createElement('div');row.className='plugin-row';row.dataset.search=(label+' '+bundle.name).toLowerCase();
      const open=document.createElement('button');open.type='button';open.className='plugin-open';open.innerHTML=svg(icon);const text=document.createElement('span'),name=document.createElement('span'),detail=document.createElement('small');name.textContent=label;detail.textContent=bundle.name+(bundle.version?' · v'+bundle.version:'')+(bundle.enabled?'':' · 未启用');text.append(name,detail);open.append(text);open.setAttribute('aria-label','打开 '+label);open.addEventListener('click',()=>{closeMenu();[...list.children].find(b=>b.dataset.plugin===bundle.name)?.click();});
      const pin=document.createElement('button');pin.type='button';pin.innerHTML=svg('pin');pin.title=pin.getAttribute('aria-label')||'';pin.setAttribute('aria-label',(pins.has(bundle.name)?'取消置顶 ':'置顶 ')+label);pin.title=pin.getAttribute('aria-label');pin.setAttribute('aria-pressed',String(pins.has(bundle.name)));pin.addEventListener('click',()=>togglePin(bundle.name));row.append(open,pin);menu.append(row);
-    }
+    }filterMenu();
    };
-   const outside=e=>{if(!menu.contains(e.target)&&!more.contains(e.target))closeMenu();};const escape=e=>{if(e.key==='Escape')closeMenu();};document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);
+   const filterMenu=()=>{for(const row of menu.querySelectorAll('.plugin-row'))row.hidden=!row.dataset.search.includes(query.toLowerCase());};
+   const outside=e=>{if(!menu.contains(e.target)&&!menuOwner?.contains(e.target))closeMenu();};const escape=e=>{if(e.key==='Escape'&&!menu.hidden){closeMenu(true);e.preventDefault();}};document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);
    const all=make('plugins','puzzle','全部插件',()=>{selectedPlugin=null;ctx.layout.selectPanel('plugins');sync();});nav.append(all);
-   nav.append(status);document.body.append(nav);
+   nav.append(status);
+   const headerName=document.createElement('span');headerName.className='pg-header-name';headerName.textContent='PureGamma';const suffix=document.createElement('small');suffix.textContent='Harness';headerName.append(suffix);
+   const headerMore=document.createElement('button');headerMore.type='button';headerMore.className='pg-header-more';headerMore.setAttribute('aria-label','更多工具');headerMore.title='更多工具';headerMore.setAttribute('aria-expanded','false');headerMore.setAttribute('aria-controls',menu.id);headerMore.innerHTML=svg('more');headerMore.addEventListener('click',()=>{if(!menu.hidden&&menuOwner===headerMore)closeMenu();else openMenu(headerMore);});
+   const place=()=>{const sidebar=document.querySelector('[data-slot="sidebar"] > div');const region=sidebar?.querySelector('[class*="_regionArea"]');if(sidebar&&nav.parentNode!==sidebar)sidebar.insertBefore(nav,region||null);const leading=document.querySelector('[data-conversation-header-leading]');if(leading&&headerName.parentNode!==leading)leading.append(headerName);const corner=document.querySelector('[data-conversation-header-corner]')||document.querySelector('header [class*="_titleRow"]');if(corner&&headerMore.parentNode!==corner)corner.prepend(headerMore);};
+   const mountObserver=new MutationObserver(()=>{if(!frame)frame=requestAnimationFrame(()=>{frame=0;place();});});mountObserver.observe(document.querySelector('#root'),{subtree:true,childList:true});place();
    const sync=()=>{
     const active=ctx.layout.panelInfo.getSnapshot().activePanelId;
     conversation.toggleAttribute('aria-current',active===null); if(active===null)conversation.setAttribute('aria-current','page');
@@ -162,19 +174,19 @@ window.__ModuleLoader__.load({ id: 'dsh-plugin-rail', factory: () => ({
       report('已打开插件页，请选择 '+label+'。');
      });
      button.dataset.tooltipDetail=bundle.name+(bundle.version?' · v'+bundle.version:'')+(bundle.enabled?'':' · 未启用');
-     button.addEventListener('contextmenu',e=>{e.preventDefault();hideTip();menu.hidden=false;more.setAttribute('aria-expanded','true');renderMenu();const row=[...menu.querySelectorAll('.plugin-row')].find(r=>r.querySelector('.plugin-open').getAttribute('aria-label')==='打开 '+label);row?.scrollIntoView({block:'nearest'});});
+     button.addEventListener('contextmenu',e=>{e.preventDefault();openMenu(button);const row=[...menu.querySelectorAll('.plugin-row')].find(r=>r.querySelector('.plugin-open').getAttribute('aria-label')==='打开 '+label);row?.scrollIntoView({block:'nearest'});});
      button.dataset.plugin=bundle.name;button.dataset.disabled=String(!bundle.enabled);
      if(panel)button.dataset.panel=panel.options.id;
      list.append(button);
     }
     nav.dataset.pluginCount=String(entries.length);sortRail();if(!menu.hidden)renderMenu();sync();
    };
-   list.addEventListener('scroll',hideTip);window.addEventListener('resize',hideTip);
+   const resize=()=>{hideTip();if(!menu.hidden)positionMenu(menuOwner);};list.addEventListener('scroll',hideTip);window.addEventListener('resize',resize);
    const observer=new MutationObserver(sync);observer.observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:['data-sidebar-collapsed']});
    const offPanel=ctx.layout.panelInfo.subscribe(sync);
    const offInventory=ctx.remote.$on('plugin-manager/changed',()=>{void refresh().catch(()=>report('插件清单暂时无法刷新。'));});
    sync();void refresh().catch(()=>report('插件清单暂时无法读取。'));
-   return()=>{disposed=true;generation++;observer.disconnect();offPanel();offInventory();hideTip();window.removeEventListener('resize',hideTip);document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);menu.remove();tooltip.remove();nav.remove();style.remove();};
+   return()=>{disposed=true;generation++;observer.disconnect();mountObserver.disconnect();cancelAnimationFrame(frame);headerName.remove();headerMore.remove();offPanel();offInventory();hideTip();window.removeEventListener('resize',resize);document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);menu.remove();tooltip.remove();nav.remove();style.remove();};
   }, 'plugin-rail: persistent capability navigation');
  }
 }) });

@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Install the release for your computer, add the bundled plugin capabilities, and continue using your existing local Harness data. This source builds PureGamma Harness with upstream engine `0.2.1-alpha.4`.
+Install the release for your computer, add the bundled plugin capabilities, and continue using your existing local Harness data. This source builds PureGamma Harness with upstream engine `0.2.1-alpha.5`.
 
 <a id="installation"></a>
 
@@ -23,7 +23,7 @@ You can move the Mac app after plugin installation. Mac builds are ad-hoc signed
 
 ## Plugins and local setup
 
-The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin archives, their exact versions, licenses, SHA-256 hashes, and the official bundles. The installer validates each new archive and retains an existing dependency's version and source. Four PureGamma UI packages add the plugin rail, IDE code colors, blue messages, and Chinese/English pixel typography. Native plugins add Codex models and a macOS completion chime.
+The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin archives, their exact versions, licenses, SHA-256 hashes, and the official bundles. The installer validates each new archive and retains an existing dependency's version and source. PureGamma UI packages provide integrated plugin navigation, IDE code colors, and a [quiet workspace](plugins/dsh-quiet-workspace/README.md) with neutral colors and system typography. The installer retains legacy blue-message and pixel-font dependencies without enabling them. Native plugins add Codex models and a macOS completion chime.
 
 | Package | Capability and setup |
 | --- | --- |

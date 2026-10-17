@@ -21,7 +21,6 @@
     "open-sea-skin",
     "dsh-magicpath",
     "dsh-vscode-code-theme",
-    "dsh-imessage-blue",
     "@deepseek-ai/dsh-experimental-tool-worktree",
     "@deepseek-ai/dsh-experimental-cot-translation-bundle",
     "@deepseek-ai/dsh-experimental-terminal-bundle",
@@ -32,7 +31,7 @@
     "@deepseek-ai/dsh-subagent-codex",
     "@deepseek-ai/dsh-subagent-claude-code",
     "dsh-plugin-rail",
-    "dsh-pixel-font"
+    "dsh-quiet-workspace"
   ],
   "plugins": [
     {

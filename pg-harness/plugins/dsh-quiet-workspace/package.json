@@ -1,0 +1,9 @@
+{
+  "name": "dsh-quiet-workspace",
+  "version": "0.1.0",
+  "description": "A neutral desktop workspace with integrated navigation and consistent controls.",
+  "type": "module",
+  "main": "index.js",
+  "exports": { ".": "./index.js", "./client": "./client.js", "./package.json": "./package.json" },
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" }, "client": { "platform": "web" } }
+}

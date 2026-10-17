@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-安装适合本机的版本、添加内置插件能力，并继续使用原有本地 Harness 数据。当前源码构建的 PureGamma Harness 使用上游 `0.2.1-alpha.4` 引擎。
+安装适合本机的版本、添加内置插件能力，并继续使用原有本地 Harness 数据。当前源码构建的 PureGamma Harness 使用上游 `0.2.1-alpha.5` 引擎。
 
 <a id="installation"></a>
 
@@ -23,7 +23,7 @@
 
 ## 插件与本地配置
 
-[清单](bundled-plugins/inventory.json)记录 13 个第三方插件归档、确切版本、许可证、SHA-256 校验值及官方插件组合。安装程序校验新归档，并保留已有依赖的版本和来源。4 个 PureGamma 界面插件提供插件图标栏、IDE 代码配色、蓝色消息和中英文像素字体。本机插件另外提供 Codex 模型和 macOS 任务完成提示音。
+[清单](bundled-plugins/inventory.json)记录 13 个第三方插件归档、确切版本、许可证、SHA-256 校验值及官方插件组合。安装程序校验新归档，并保留已有依赖的版本和来源。PureGamma 界面插件提供整合式插件导航、IDE 代码配色，以及采用中性色和系统字体的[简洁工作空间](plugins/dsh-quiet-workspace/README.zh.md)。安装器保留旧版蓝色消息和像素字体依赖，但不启用它们。本机插件另外提供 Codex 模型和 macOS 任务完成提示音。
 
 | 插件 | 能力与配置 |
 | --- | --- |

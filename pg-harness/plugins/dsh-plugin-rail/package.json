@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-rail",
-  "version": "0.1.0",
-  "description": "展开或收起侧边栏时均保留插件能力矢量图标导航。",
+  "version": "0.2.0",
+  "description": "整合式置顶插件导航和可搜索的顶部工具菜单。",
   "type": "module",
   "main": "index.js",
   "exports": {

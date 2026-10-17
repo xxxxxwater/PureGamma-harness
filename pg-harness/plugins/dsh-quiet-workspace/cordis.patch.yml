@@ -1,0 +1,3 @@
+- insert:
+    - id: quiet-workspace
+      name: dsh-quiet-workspace

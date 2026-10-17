@@ -2,6 +2,6 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write pg-harness/plugins/dsh-plugin-rail/README.md
-/plugin-capability-rail:
-  en: 6d1584013377dc2f
-  zh: 97d8c68b3ffd33f8
+/plugin-capability-navigation:
+  en: 21129248e734b4f4
+  zh: bf59a4e941989f2a
