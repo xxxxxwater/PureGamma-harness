@@ -231,7 +231,7 @@ test('installation backs up originals once and never patches different versions'
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
-test('SentinelX alpha.4/alpha.5 compatibility retains bridge code, OAuth state, dependency sources and custom policies', () => {
+test('SentinelX rc.2 compatibility retains bridge code, OAuth state, dependency sources and custom policies', () => {
   const home = mkdtempSync(join(tmpdir(), 'pg-sentinelx-compat-'))
   try {
     const profile = join(home, 'profiles', 'desktop')
@@ -251,8 +251,9 @@ test('SentinelX alpha.4/alpha.5 compatibility retains bridge code, OAuth state, 
     const prior = JSON.parse(original)
     assert.ok(fixed.engines.dsh.includes('0.2.1-alpha.4'))
     assert.ok(fixed.engines.dsh.includes('0.2.1-alpha.5'))
+    assert.ok(fixed.engines.dsh.includes('0.2.1-rc.2'))
     for (const name of ['@deepseek-ai/dsh-mcp-client', '@deepseek-ai/dsh-tools']) {
-      assert.ok(fixed.peerDependencies[name].includes('0.2.1-alpha.5'))
+      assert.ok(fixed.peerDependencies[name].includes('0.2.1-rc.2'))
     }
     assert.ok(fixed.engines.dsh.includes('0.2.1-alpha.2'))
     assert.equal(fixed.engines.node, prior.engines.node)
@@ -273,9 +274,10 @@ test('SentinelX alpha.4/alpha.5 compatibility retains bridge code, OAuth state, 
 })
 
 
-test('SentinelX upgrades an existing alpha.4 repair to alpha.5 without widening unknown custom policy', () => {
+for (const suffix of ['', ' || 0.2.1-alpha.5']) {
+test(`SentinelX upgrades an existing alpha repair${suffix} to rc.2 without widening unknown custom policy`, () => {
   const original = JSON.parse(archiveContent('dsh-sentinelx-0.1.1.tgz', 'package.json'))
-  const alpha4 = original.peerDependencies['@deepseek-ai/dsh-tools'] + ' || 0.2.1-alpha.4'
+  const alpha4 = original.peerDependencies['@deepseek-ai/dsh-tools'] + ' || 0.2.1-alpha.4' + suffix
   const peers = ['@deepseek-ai/dsh-mcp-client', '@deepseek-ai/dsh-tools']
   const existing = {
     ...original,
@@ -288,7 +290,7 @@ test('SentinelX upgrades an existing alpha.4 repair to alpha.5 without widening 
     if (existing.devDependencies[name] !== undefined) existing.devDependencies[name] = alpha4
   }
   const upgraded = JSON.parse(patchSentinelXManifest(JSON.stringify(existing)))
-  assert.equal(upgraded.engines.dsh, alpha4 + ' || 0.2.1-alpha.5')
+  assert.equal(upgraded.engines.dsh, original.peerDependencies[peers[0]] + ' || 0.2.1-alpha.4 || 0.2.1-alpha.5 || 0.2.1-rc.2')
   for (const name of peers) {
     assert.equal(upgraded.peerDependencies[name], upgraded.engines.dsh)
     if (existing.devDependencies[name] !== undefined) assert.equal(upgraded.devDependencies[name], upgraded.engines.dsh)
@@ -298,3 +300,4 @@ test('SentinelX upgrades an existing alpha.4 repair to alpha.5 without widening 
   const serialized = JSON.stringify(custom)
   assert.equal(patchSentinelXManifest(serialized), serialized)
 })
+}

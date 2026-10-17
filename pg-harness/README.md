@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Install the release for your computer, add the bundled plugin capabilities, and continue using your existing local Harness data. This source builds PureGamma Harness with upstream engine `0.2.1-alpha.5`.
+Install the release for your computer, add the bundled plugin capabilities, and continue using your existing local Harness data. This source builds PureGamma Harness with upstream engine `0.2.1-rc.2`.
 
 <a id="installation"></a>
 
@@ -52,7 +52,7 @@ The installer adds a preview compatibility fix to the bundled `dsh-univer-office
 
 The bundled Better Sidebar 0.25.0 terminal uses the current Connection service and retains its Host/Origin checks, including native-shell WebSocket support. The installer applies the version-specific repair after dependency installation and backs up the original entry point.
 
-SentinelX 0.1.1 declares support for alpha.4 after its unchanged bridge passes the current Harness API checks. The installer backs up its manifest and extends only the known peer ranges, retaining its dependency versions, linked source, OAuth state, and any explicit custom compatibility policy.
+SentinelX 0.1.1 declares support for rc.2 through its unchanged bridge and compatible Harness APIs. The installer backs up its manifest and extends only the known peer ranges, retaining its dependency versions, linked source, OAuth state, and any explicit custom compatibility policy.
 
 <a id="build-and-verify"></a>
 

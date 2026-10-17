@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-安装适合本机的版本、添加内置插件能力，并继续使用原有本地 Harness 数据。当前源码构建的 PureGamma Harness 使用上游 `0.2.1-alpha.5` 引擎。
+安装适合本机的版本、添加内置插件能力，并继续使用原有本地 Harness 数据。当前源码构建的 PureGamma Harness 使用上游 `0.2.1-rc.2` 引擎。
 
 <a id="installation"></a>
 
@@ -52,7 +52,7 @@ Codex 模型插件要求本机安装官方 Codex CLI。每位用户都需在浏�
 
 内置 Better Sidebar 0.25.0 的终端使用新版 Connection 服务，保留 Host/Origin 检查和本机桌面 WebSocket 支持。安装器在依赖安装完成后应用对应版本的修复，并备份原始入口文件。
 
-SentinelX 0.1.1 的原有桥接代码通过当前 Harness API 检查后，声明支持 alpha.4。安装器备份其清单并仅扩展已知的 peer 版本范围，保留依赖版本、本地链接来源、OAuth 状态和显式自定义的兼容策略。
+SentinelX 0.1.1 通过原有桥接代码和兼容的 Harness API 声明支持 rc.2。安装器备份其清单并仅扩展已知的 peer 版本范围，保留依赖版本、本地链接来源、OAuth 状态和显式自定义的兼容策略。
 
 <a id="build-and-verify"></a>
 

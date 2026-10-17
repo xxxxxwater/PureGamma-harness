@@ -6,7 +6,7 @@ on:
       version:
         description: Existing PureGamma release tag version
         required: true
-        default: 0.2.1-alpha.5
+        default: 0.2.1-rc.2
         type: string
       publish_only:
         description: Publish the already verified installers from the release
@@ -52,7 +52,7 @@ jobs:
           exit $LASTEXITCODE
       - name: Verify plugin migration and navigation
         run: |
-          node --test pg-harness/install.test.mjs pg-harness/plugins/dsh-plugin-rail/plugin.test.mjs
+          node --test pg-harness/install.test.mjs pg-harness/plugin-patches/bundled-compat.test.mjs pg-harness/plugins/dsh-plugin-rail/plugin.test.mjs
           exit $LASTEXITCODE
       - name: Build Windows installer and smoke packaged runtime
         run: |

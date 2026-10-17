@@ -6,7 +6,7 @@ on:
       version:
         description: Published PureGamma release version
         required: true
-        default: 0.2.1-alpha.5
+        default: 0.2.1-rc.2
         type: string
 
 permissions:

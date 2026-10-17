@@ -137,21 +137,22 @@ const PATCHES = [
   { name: 'dsh-sentinelx', version: '0.1.1', path: 'package.json', backup: 'dsh-sentinelx-package.json', patch: patchSentinelXManifest },
 ]
 
-/** Extend known SentinelX bridge peer ranges through alpha.5 without replacing custom policies. */
+/** Extend known SentinelX bridge peer ranges through rc.2 without replacing custom policies. */
 export function patchSentinelXManifest(source) {
   const manifest = JSON.parse(source)
   if (manifest.name !== 'dsh-sentinelx' || manifest.version !== '0.1.1') return source
   const previous = '0.2.0-rc.1 || 0.2.0-rc.2 || 0.2.1-alpha.1 || 0.2.1-alpha.2'
   const alpha4 = previous + ' || 0.2.1-alpha.4'
-  const supported = alpha4 + ' || 0.2.1-alpha.5'
+  const alpha5 = alpha4 + ' || 0.2.1-alpha.5'
+  const supported = alpha5 + ' || 0.2.1-rc.2'
   const peers = ['@deepseek-ai/dsh-mcp-client', '@deepseek-ai/dsh-tools']
-  if (manifest.engines?.dsh !== undefined && ![alpha4, supported].includes(manifest.engines.dsh)) return source
-  if (peers.some(name => ![previous, alpha4, supported].includes(manifest.peerDependencies?.[name]))) return source
+  if (manifest.engines?.dsh !== undefined && ![alpha4, alpha5, supported].includes(manifest.engines.dsh)) return source
+  if (peers.some(name => ![previous, alpha4, alpha5, supported].includes(manifest.peerDependencies?.[name]))) return source
   if (manifest.engines?.dsh === supported && peers.every(name => manifest.peerDependencies[name] === supported)) return source
   manifest.engines = { ...manifest.engines, dsh: supported }
   for (const name of peers) {
     manifest.peerDependencies[name] = supported
-    if ([previous, alpha4].includes(manifest.devDependencies?.[name])) manifest.devDependencies[name] = supported
+    if ([previous, alpha4, alpha5].includes(manifest.devDependencies?.[name])) manifest.devDependencies[name] = supported
   }
   return JSON.stringify(manifest, null, 2) + '\n'
 }
