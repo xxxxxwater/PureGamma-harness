@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync
 import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { test } from 'node:test'
 import {
@@ -12,7 +12,7 @@ import {
 } from './bundled-compat.mjs'
 
 function archiveContent(name, path) {
-  return execFileSync('tar', ['-xOf', new URL('../bundled-plugins/' + name, import.meta.url).pathname, 'package/' + path],
+  return execFileSync('tar', ['-xOf', fileURLToPath(new URL('../bundled-plugins/' + name, import.meta.url)), 'package/' + path],
     { maxBuffer: 32 * 1024 * 1024 }).toString()
 }
 
