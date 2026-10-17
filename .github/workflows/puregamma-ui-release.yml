@@ -1,0 +1,142 @@
+name: PureGamma Windows build and desktop Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing PureGamma release tag version
+        required: true
+        default: 0.2.1-alpha.5
+        type: string
+
+concurrency:
+  group: puregamma-ui-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Build and verify Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      DSH_DESKTOP_BUILD_VERSION: ${{ inputs.version }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_TAG: puregamma-harness-v${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/tags/puregamma-harness-v${{ inputs.version }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/puregamma-pnpm
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          exit $LASTEXITCODE
+      - name: Verify plugin migration and navigation
+        run: |
+          node --test pg-harness/install.test.mjs pg-harness/plugins/dsh-plugin-rail/plugin.test.mjs
+          exit $LASTEXITCODE
+      - name: Build Windows installer and smoke packaged runtime
+        run: |
+          pnpm run package:desktop:win:x64:unsigned
+          exit $LASTEXITCODE
+      - name: Stage verified installer
+        run: |
+          New-Item -ItemType Directory -Path release-assets | Out-Null
+          $installers = @(Get-ChildItem apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe)
+          if ($installers.Count -ne 1) { throw 'Expected exactly one verified Windows installer' }
+          $name = "puregamma-harness-v$env:RELEASE_VERSION-windows-x64.exe"
+          Copy-Item -LiteralPath $installers[0].FullName -Destination "release-assets/$name"
+          $hash = (Get-FileHash "release-assets/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $name" | Set-Content "release-assets/$name.sha256" -Encoding utf8NoBOM
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: puregamma-ui-windows-x64
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Upload verified Windows installer to the staged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release upload "$env:RELEASE_TAG" "release-assets/puregamma-harness-v$env:RELEASE_VERSION-windows-x64.exe" "release-assets/puregamma-harness-v$env:RELEASE_VERSION-windows-x64.exe.sha256" --clobber
+          exit $LASTEXITCODE
+      - name: Retain packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: puregamma-ui-windows-diagnostics
+          path: apps/desktop/.desktop-build/packaging-runs/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+  desktop-package:
+    name: Publish Windows and macOS in GitHub Packages
+    needs: windows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_TAG: puregamma-harness-v${{ inputs.version }}
+    steps:
+      - uses: oras-project/setup-oras@v2.0.1
+        with:
+          version: 1.3.3
+      - name: Download both verified native distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release download "$RELEASE_TAG" --pattern "puregamma-harness-v$RELEASE_VERSION-windows-x64.exe" --pattern "puregamma-harness-v$RELEASE_VERSION-macos-x64.zip" --dir package
+          gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha > source-commit.txt
+          cd package
+          sha256sum ./*.exe ./*.zip > SHA256SUMS
+      - name: Publish combined desktop artifact
+        working-directory: package
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
+        run: |
+          echo "$GHCR_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          package="ghcr.io/${PACKAGE_OWNER,,}/puregamma-harness-desktop:$RELEASE_VERSION"
+          oras push "$package" \
+            --artifact-type application/vnd.puregamma.harness.desktop.v1 \
+            --annotation "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --annotation "org.opencontainers.image.version=$RELEASE_VERSION" \
+            --annotation "org.opencontainers.image.revision=$(cat ../source-commit.txt)" \
+            --annotation 'org.opencontainers.image.title=PureGamma Harness Windows and macOS' \
+            "puregamma-harness-v$RELEASE_VERSION-windows-x64.exe:application/vnd.microsoft.portable-executable" \
+            "puregamma-harness-v$RELEASE_VERSION-macos-x64.zip:application/zip" \
+            SHA256SUMS:text/plain
+          oras manifest fetch "$package" > manifest.json
+      - name: Verify both package payload digests
+        working-directory: package
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,hashlib,os
+          version=os.environ['RELEASE_VERSION']
+          manifest=json.loads(pathlib.Path('manifest.json').read_text())
+          layers={layer['digest']:layer for layer in manifest['layers']}
+          for name in [f'puregamma-harness-v{version}-windows-x64.exe',f'puregamma-harness-v{version}-macos-x64.zip','SHA256SUMS']:
+              data=pathlib.Path(name).read_bytes()
+              digest='sha256:'+hashlib.sha256(data).hexdigest()
+              assert digest in layers and layers[digest]['size']==len(data),name
+              print('Verified',name,digest)
+          PY
