@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
-          ref: 67436bb15f1a3bf01429797fd373dec0ba4f76e4
+          ref: puregamma-harness-v0.2.1-alpha.4
           persist-credentials: false
       - uses: pnpm/action-setup@v5.0.0
         with:
