@@ -1,6 +1,7 @@
 import {homedir} from 'node:os'
 import {join,resolve} from 'node:path'
 import {CodexAppServer,cliEnvironment,findCli} from './app-server.mjs'
+import {materializeModels} from './catalog.mjs'
 import {CliTokenSource} from './auth.mjs'
 
 export const name='codex-cli-models'
@@ -15,7 +16,7 @@ export async function apply(ctx,config={}) {
   const cliPath=await findCli(config.cliPath,environment)
   const server=new CodexAppServer(cliPath,environment)
   const lifetime=new AbortController()
-  let pendingLogin,loginError,catalogPromise,catalogTime=0,snapshot,unsupported=[]
+  let pendingLogin,loginError,catalogPromise,catalogTime=0,snapshot
   ctx.effect(()=>()=>{lifetime.abort(new Error('Codex 插件已关闭'));return server.dispose()},'codex-cli: app-server lifecycle')
   const tokenSource=new CliTokenSource(home,server)
   const [pi,llm,codex]=await Promise.all([
@@ -24,7 +25,6 @@ export async function apply(ctx,config={}) {
     ctx.root.loader.import('@earendil-works/pi-ai/providers/openai-codex',()=>[]),
   ])
   const builtin=codex.openaiCodexProvider()
-  const known=new Map(builtin.getModels().map(model=>[model.id,model]))
   const emptyStore={read:async()=>undefined,list:async()=>[],modify:async()=>{throw new Error('Codex CLI owns its login')},delete:async()=>{throw new Error('Codex CLI owns its login')}}
   const auth={credentials:emptyStore,authContext:{env:async()=>undefined,fileExists:async()=>false}}
 
@@ -38,10 +38,9 @@ export async function apply(ctx,config={}) {
         if(!Array.isArray(result.data))throw new Error('Codex 返回了无效的模型列表')
         rows.push(...result.data.filter(row=>!row.hidden));cursor=result.nextCursor
       }while(cursor)
-      unsupported=rows.filter(row=>!known.has(row.model)).map(row=>row.model)
       const metadata=new Map(rows.map(row=>[row.model,row]))
-      const models=rows.filter(row=>known.has(row.model)).map(row=>({...known.get(row.model),provider:PROVIDER,name:row.displayName??row.model}))
-      if(!models.length)throw new Error('此 Codex CLI 模型列表与本机 Harness 模型适配器不兼容，请更新 Harness。')
+      const models=materializeModels(rows,builtin.getModels(),PROVIDER)
+      if(!models.length)throw new Error('Codex CLI 未返回可用的 ChatGPT 模型。')
       const provider={...builtin,id:PROVIDER,name:LABEL,
         // The CLI refreshes its login; pi-ai receives one request token and never rotates it independently.
         auth:{apiKey:{name:LABEL,resolve:async({credential})=>({auth:credential?.key?{apiKey:credential.key}:{},source:LABEL})}},
@@ -93,10 +92,10 @@ export async function apply(ctx,config={}) {
   const status=async()=>{
     const account=await server.request('account/read',{refreshToken:false},lifetime.signal)
     let models=[],catalogError
-    try{const state=await loadCatalog();models=[...state.metadata.values()].filter(row=>known.has(row.model)).map(row=>({id:row.model,name:row.displayName,default:row.isDefault}))}catch(error){catalogError=error.message}
+    try{const state=await loadCatalog();models=[...state.metadata.values()].map(row=>({id:row.model,name:row.displayName??row.model,default:row.isDefault}))}catch(error){catalogError=error.message}
     return{loggedIn:account.account?.type==='chatgpt',accountType:account.account?.type,
       email:account.account?.email,plan:account.account?.planType,
-      models,unsupportedModels:unsupported,loginPending:!!pendingLogin,loginError,catalogError,provider:PROVIDER}
+      models,loginPending:!!pendingLogin,loginError,catalogError,provider:PROVIDER}
   }
   const send=(res,code,value)=>{res.writeHead(code,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(value))}
   ctx.effect(()=>ctx.webServer.register({kind:'prefix',path:'/codex-cli/api',handler:async(req,res)=>{

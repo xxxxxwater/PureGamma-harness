@@ -4,9 +4,28 @@ import {mkdtemp,writeFile,rm,chmod} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {CodexAppServer,cliEnvironment} from './app-server.mjs'
+import {materializeModels} from './catalog.mjs'
 import {CliTokenSource,readCliLogin} from './auth.mjs'
 const jwt=expires=>'header.'+Buffer.from(JSON.stringify({exp:Math.floor(expires/1000)})).toString('base64url')+'.signature'
 const persist=(home,token)=>writeFile(join(home,'auth.json'),JSON.stringify({auth_mode:'chatgpt',tokens:{access_token:token,refresh_token:'private-refresh'}}),{mode:0o600})
+
+test('every visible CLI ChatGPT model is materialized, including new model ids',()=>{
+ const codexModel={id:'gpt-5-codex',api:'openai-codex-responses',provider:'openai-codex',name:'GPT-5-Codex',contextWindow:196000,maxTokens:8192,input:['text','image'],reasoning:true}
+ const rows=[
+  {model:'gpt-5-codex',displayName:'GPT-5 Codex'},
+  {model:'gpt-5.2',displayName:'GPT-5.2',contextWindow:256000,maxOutputTokens:16000},
+  {model:'hidden-model',hidden:true},
+ ]
+ const models=materializeModels(rows,[codexModel],'codex-cli')
+ assert.deepEqual(models.map(model=>model.id),['gpt-5-codex','gpt-5.2'])
+ assert.equal(models[0].name,'GPT-5 Codex')
+ assert.equal(models[1].name,'GPT-5.2')
+ assert.equal(models[1].api,'openai-codex-responses')
+ assert.equal(models[1].provider,'codex-cli')
+ assert.equal(models[1].contextWindow,256000)
+ assert.equal(models[1].maxTokens,16000)
+ assert.deepEqual(models[1].input,['text','image'])
+})
 
 test('CLI child environment excludes Harness and ambient API credentials',()=>{
  const env=cliEnvironment({HOME:'/test',PATH:'/bin',OPENAI_API_KEY:'private',ANTHROPIC_API_KEY:'private',DSH_WEB_TOKEN:'private',PASSWORD:'private',HTTPS_PROXY:'http://proxy'},'/codex')

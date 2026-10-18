@@ -12,6 +12,7 @@
   },
   "files": [
     "index.js",
+    "catalog.mjs",
     "app-server.mjs",
     "auth.mjs",
     "client.js",

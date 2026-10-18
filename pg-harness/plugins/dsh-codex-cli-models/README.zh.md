@@ -6,7 +6,7 @@
 
 每个人都需登录自己的 ChatGPT 账号，并使用自己账号的额度。插件不包含任何账户、订阅、API key、登录文件或个人会话。设置面板提供重新登录、切换账号、浏览器继续授权链接，以及取消未完成授权的入口。
 
-模型目录来自官方 `codex app-server` 的 `model/list`；列出的模型不代表推理权限或剩余额度，实际请求可能返回账号额度限制。只展示本机 Harness 适配器也支持的模型。官方 CLI 管理登录与续期；插件读取其请求凭据，不向页面返回 token、不复制到 Harness 配置、不写入 CLI 登录文件。
+模型目录来自官方 `codex app-server` 的 `model/list`。该目录返回的所有非隐藏模型均可选择，包括本机 Harness 目录尚不认识的模型 ID；新 ID 使用 Codex Responses 适配器配置，并采用 CLI 返回的上下文或输出限制。这是 Codex CLI 模型目录，并不表示常规 ChatGPT 应用中显示的每个模型都能通过 Codex 使用。模型列出不代表账号有推理权限或剩余额度，实际请求可能返回账号额度限制。官方 CLI 管理登录与续期；插件读取其请求凭据，不向页面返回 token、不复制到 Harness 配置、不写入 CLI 登录文件。
 
 请求消耗当前账号共享的 Codex / ChatGPT Work 工作额度，不使用普通 ChatGPT 聊天消息额度或 OpenAI API 余额。可在官方用量页面或 Codex CLI `/status` 查看剩余额度；Harness 的 token 统计不能换算为订阅额度。参考[官方用量说明](https://learn.chatgpt.com/docs/pricing)。
 

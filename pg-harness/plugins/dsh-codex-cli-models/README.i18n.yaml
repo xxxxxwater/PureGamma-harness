@@ -3,5 +3,5 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write pg-harness/plugins/dsh-codex-cli-models/README.md
 /codex-cli-models-plugin:
-  en: e556401c9fea681c
-  zh: b0aea2ae637709cd
+  en: 0b3de566e8d56839
+  zh: 92246b092eacf888
