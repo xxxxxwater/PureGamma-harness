@@ -31,12 +31,14 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } },
   }
   manifest.dependencies ??= {}
+  const alreadyInstalled = new Set(Object.keys(manifest.dependencies))
   manifest.dsh ??= {}
   manifest.dsh.profile ??= {}
   manifest.dsh.profile.bundles ??= ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app']
   // Both generations register codex-cli; keep the old dependency for rollback but mount only the native adapter.
-  manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter(name => !['dsh-codex-cli', 'dsh-pixel-font', 'dsh-imessage-blue'].includes(name))
-  const localPlugins = ['dsh-plugin-rail', 'dsh-vscode-code-theme', 'dsh-quiet-workspace', 'dsh-codex-cli-models', 'dsh-evidence-trust']
+  manifest.dsh.profile.bundles = manifest.dsh.profile.bundles.filter(name => !['dsh-codex-cli', 'dsh-pixel-font', 'dsh-imessage-blue', 'dsh-prompt-enhancer'].includes(name))
+  delete manifest.dependencies['dsh-prompt-enhancer']
+  const localPlugins = ['dsh-plugin-rail', 'dsh-vscode-code-theme', 'dsh-quiet-workspace', 'dsh-codex-cli-models', 'dsh-claude-cli-models', 'dsh-evidence-trust', 'dsh-prompt-pro', 'dsh-composer-menu']
   if (process.platform === 'darwin') localPlugins.push('dsh-task-completion-chime')
   for (const name of localPlugins) {
     const destination = join(home, 'local-plugins', name)
@@ -52,6 +54,8 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
     manifest.dependencies[name] = 'link:../../local-plugins/' + name
     if (!manifest.dsh.profile.bundles.includes(name)) manifest.dsh.profile.bundles.push(name)
   }
+  // The linked Claude plugin loads this SDK from the desktop profile resolver.
+  manifest.dependencies['@anthropic-ai/claude-agent-sdk'] ??= '0.3.302'
   const inventoryPath = join(dirname(fileURLToPath(import.meta.url)), 'bundled-plugins', 'inventory.json')
   if (existsSync(inventoryPath)) {
     const inventory = JSON.parse(readFileSync(inventoryPath, 'utf8'))
@@ -68,6 +72,7 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
       manifest.dependencies[plugin.name] = 'file:../../bundled-plugin-archives/' + plugin.archive
     }
     for (const bundle of inventory.bundles) {
+      if (alreadyInstalled.has(bundle) && !manifest.dsh.profile.bundles.includes(bundle)) continue
       if (!manifest.dsh.profile.bundles.includes(bundle)) manifest.dsh.profile.bundles.push(bundle)
     }
   }

@@ -1,0 +1,3 @@
+- insert:
+    - id: claude-cli-models
+      name: dsh-claude-cli-models

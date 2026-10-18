@@ -28,6 +28,9 @@ test('installation preserves third-party bundles and user settings and remains r
     assert.ok(result.dsh.profile.bundles.includes('dsh-codex-cli-models'))
     assert.equal(result.dependencies['dsh-evidence-trust'], 'link:../../local-plugins/dsh-evidence-trust')
     assert.ok(result.dsh.profile.bundles.includes('dsh-evidence-trust'))
+    assert.equal(result.dependencies['dsh-prompt-pro'], 'link:../../local-plugins/dsh-prompt-pro')
+    assert.equal(result.dsh.profile.bundles.filter(name => name === 'dsh-prompt-pro').length, 1)
+    assert.ok(result.dsh.profile.bundles.includes('dsh-composer-menu'))
     assert.equal(result.dependencies[REA_BUNDLE], REA_RELEASE_SPEC)
     assert.equal(result.dsh.profile.bundles.filter(name => name === REA_BUNDLE).length, 1)
     const trustPlugin = join(home, 'local-plugins', 'dsh-evidence-trust')
@@ -41,6 +44,19 @@ test('installation preserves third-party bundles and user settings and remains r
     for (const plugin of inventory.plugins) assert.equal(result.dependencies[plugin.name], 'file:../../bundled-plugin-archives/' + plugin.archive)
     assert.equal(readFileSync(join(profile, 'cordis.patch.yml'), 'utf8'), 'retained settings\n')
     assert.equal(readFileSync(join(home, 'credentials.json'), 'utf8'), 'retained credentials\n')
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+test('installing local UI updates preserves an already-installed disabled bundled plugin', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-disabled-bundle-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'billion-context': '0.1.199' }, dsh: { profile: { bundles: ['retained'] } } }))
+    install(home)
+    const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(result.dependencies['billion-context'], '0.1.199')
+    assert.ok(!result.dsh.profile.bundles.includes('billion-context'))
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
@@ -93,7 +109,9 @@ test('already-installed-but-disabled REA is activated without replacing its sour
     install(home)
     const after = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(after.dependencies[REA_BUNDLE], originalReaSource)
-    assert.deepEqual(after.dsh.profile.bundles.slice(0, 2), before.dsh.profile.bundles)
+    assert.equal(after.dsh.profile.bundles[0], 'another')
+    assert.ok(!after.dsh.profile.bundles.includes('dsh-prompt-enhancer'))
+    assert.ok(after.dsh.profile.bundles.includes('dsh-prompt-pro'))
     assert.equal(after.dsh.profile.bundles.filter(x => x === REA_BUNDLE).length, 1)
     assert.deepEqual(after.custom, before.custom)
     install(home)

@@ -23,12 +23,15 @@
 
 ## 插件与本地配置
 
-[清单](bundled-plugins/inventory.json)记录 13 个第三方插件归档、确切版本、许可证、SHA-256 校验值及官方插件组合。安装程序校验新归档，并保留已有依赖的版本和来源。PureGamma 界面插件提供整合式插件导航、IDE 代码配色，以及采用中性色和系统字体的[简洁工作空间](plugins/dsh-quiet-workspace/README.zh.md)。安装器保留旧版蓝色消息和像素字体依赖，但不启用它们。本机插件另外提供 Codex 模型和 macOS 任务完成提示音。
+[清单](bundled-plugins/inventory.json)记录 13 个第三方插件归档、确切版本、许可证、SHA-256 校验值及官方插件组合。安装程序校验新归档，并保留已有依赖的版本、来源与启用状态。PureGamma 界面插件提供整合式插件导航、IDE 代码配色，以及采用中性色和系统字体的[简洁工作空间](plugins/dsh-quiet-workspace/README.zh.md)。安装器保留旧版蓝色消息和像素字体依赖，但不启用它们。本机插件另外提供 Codex 模型和 macOS 任务完成提示音。
 
 | 插件 | 能力与配置 |
 | --- | --- |
 | [`dsh-evidence-trust`](plugins/dsh-evidence-trust/README.zh.md) | 基于会话的哈希链 Evidence Ledger、Unknown Registry 和可选择启用的强制 Verification Gate；默认仅审计，不存储原始工具输出。 |
 | [`dsh-codex-cli-models`](plugins/dsh-codex-cli-models/README.zh.md) | 使用本机 Codex 登录调用模型，支持 Harness 历史和工具；在设置 → Codex CLI 中登录。 |
+| [`dsh-prompt-pro`](plugins/dsh-prompt-pro/README.zh.md) | 通过本机已登录的 Codex CLI 扩写草稿，提供单色输入框图标与撤回。 |
+| [`dsh-composer-menu`](plugins/dsh-composer-menu/README.zh.md) | 从会话加号菜单打开文件、项目、GitHub 引用、Skills、连接器、设计规范与插件。 |
+| [`dsh-claude-cli-models`](plugins/dsh-claude-cli-models/README.zh.md) | 读取本机 Claude CLI 账号的模型目录；推理需要该账号具备相应订阅或授权。 |
 | [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.zh.md) | macOS 上每次主会话任务正常完成后播放一次提示音。 |
 | `dsh-context` | 查看上下文构成及其变化。 |
 | `billion-context` | 压缩会话上下文；在本机配置与模型有关的设置。 |
@@ -69,3 +72,5 @@ SentinelX 0.1.1 通过原有桥接代码和兼容的 Harness API 声明支持 rc
 手动[发布构建工作流](../.github/workflows/puregamma-desktop-release.yml)在独立原生主机上构建 Windows 和 Apple Silicon 版本。源码包来自发布提交。运行 `node --test pg-harness/install.test.mjs pg-harness/plugin-patches/bundled-compat.test.mjs pg-harness/plugin-patches/univer-office/preview.test.mjs pg-harness/plugins/dsh-codex-cli-models/plugin.test.mjs pg-harness/plugins/dsh-task-completion-chime/plugin.test.mjs` 验证配置保留与办公预览回归。预览测试通过真实 React 运行已发布客户端，并包含未修补客户端缺失预览的对照场景。对应的客户端与桌面测试覆盖品牌及打包约定。
 
 应用的资源目录包含本目录。Windows 配套程序与 Mac 命令使用内置运行时执行 `install.mjs`，将可选插件添加到专用桌面配置中。适用上游 MIT 许可证和第三方声明，像素字体许可证包含在 `licenses` 下。
+
+MemOS 2.0.20-compat.1 适配器使用针对会话格式 v4 的来源补丁：记忆召回和辅助用户消息使用各自的生产来源，辅助助手消息标明模型来源。安装器备份两份适配器文件，并保留记忆数据库与设置。

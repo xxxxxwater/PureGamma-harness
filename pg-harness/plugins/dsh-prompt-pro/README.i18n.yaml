@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write pg-harness/plugins/dsh-prompt-pro/README.md
+/puregamma-prompt-pro:
+  en: d87769b50b2ce7ed
+  zh: a2e7d2d515c2520a

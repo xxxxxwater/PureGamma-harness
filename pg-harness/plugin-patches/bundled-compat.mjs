@@ -6,6 +6,19 @@ const MAGICPATH_MARKER = '// PureGamma MagicPath tool schema compatibility v2'
 const BILLION_MARKER = '// PureGamma billion-context fetch compatibility v1'
 const AT_FILE_CLIENT_MARKER = '// PureGamma at-file Remote client compatibility v1'
 const SIDEBAR_MARKER = '// PureGamma Better Sidebar connection compatibility v1'
+const MEMOS_SOURCE_MARKER = '// PureGamma MemOS format-v4 source compatibility v1'
+
+/** Give MemOS recall and auxiliary LLM messages the producer identities required by Session v4. */
+export function patchMemosSources(source) {
+  if (source.includes(MEMOS_SOURCE_MARKER)) return source
+  if (source.includes('plugin: DEEPSEEK_HARNESS_PLUGIN,')) {
+    source = replaceOnce(source, 'kind: "plugin",\n                    plugin: DEEPSEEK_HARNESS_PLUGIN,', 'kind: `plugin:${DEEPSEEK_HARNESS_PLUGIN}`,', 'MemOS recall source')
+  } else {
+    source = replaceOnce(source, 'source: { kind: "plugin", plugin: HOST_LLM_MESSAGE_SOURCE }', 'source: { kind: `plugin:${HOST_LLM_MESSAGE_SOURCE}` }', 'MemOS LLM user source')
+    source = replaceOnce(source, 'source: { provider: route.provider, model: route.model }', 'source: { kind: "model", provider: route.provider, model: route.model }', 'MemOS LLM assistant source')
+  }
+  return MEMOS_SOURCE_MARKER + '\n' + source
+}
 
 function replaceOnce(source, before, after, plugin) {
   const at = source.indexOf(before)
@@ -129,6 +142,8 @@ export function patchBillionContext(source) {
 }
 
 const PATCHES = [
+  { name: '@memtensor/memos-local-plugin', version: '2.0.20-compat.1', path: 'dist/adapters/deepseek-harness/index.js', backup: 'memos-dsh-index.js', patch: patchMemosSources },
+  { name: '@memtensor/memos-local-plugin', version: '2.0.20-compat.1', path: 'dist/adapters/deepseek-harness/host-llm.js', backup: 'memos-dsh-host-llm.js', patch: patchMemosSources },
   { name: 'dsh-at-file', version: '0.7.0', path: 'lib/index.js', backup: 'dsh-at-file-index.js', patch: patchAtFile },
   { name: 'dsh-at-file', version: '0.7.0', path: 'lib/client.js', backup: 'dsh-at-file-client.js', patch: patchAtFileClient },
   { name: 'dsh-magicpath', version: '0.1.0', path: 'lib/index.js', backup: 'dsh-magicpath-index.js', patch: patchMagicPath },

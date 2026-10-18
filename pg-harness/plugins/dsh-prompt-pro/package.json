@@ -1,0 +1,20 @@
+{
+  "name": "dsh-prompt-pro",
+  "version": "0.1.0",
+  "description": "One-click professional prompt expansion for PureGamma Harness conversations",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "README.md", "README.zh.md"],
+  "license": "MIT",
+  "engines": { "node": ">=22.19.0" },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-slots"] }
+  },
+  "browser": "client.js"
+}

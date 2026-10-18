@@ -1,0 +1,14 @@
+{
+  "name": "dsh-composer-menu",
+  "version": "0.1.0",
+  "description": "A monochrome add menu for PureGamma Harness conversations",
+  "type": "module",
+  "main": "./index.js",
+  "exports": { ".": "./index.js", "./client": "./client.js", "./package.json": "./package.json" },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "README.md", "README.zh.md"],
+  "license": "MIT",
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-slots", "@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-workspace", "@deepseek-ai/dsh-api-remotes", "@deepseek-ai/dsh-client-ui-plugin-manager"] }
+  }
+}

@@ -23,12 +23,15 @@ You can move the Mac app after plugin installation. Mac builds are ad-hoc signed
 
 ## Plugins and local setup
 
-The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin archives, their exact versions, licenses, SHA-256 hashes, and the official bundles. The installer validates each new archive and retains an existing dependency's version and source. PureGamma UI packages provide integrated plugin navigation, IDE code colors, and a [quiet workspace](plugins/dsh-quiet-workspace/README.md) with neutral colors and system typography. The installer retains legacy blue-message and pixel-font dependencies without enabling them. Native plugins add Codex models and a macOS completion chime.
+The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin archives, their exact versions, licenses, SHA-256 hashes, and the official bundles. The installer validates each new archive and retains an existing dependency's version, source, and enabled state. PureGamma UI packages provide integrated plugin navigation, IDE code colors, and a [quiet workspace](plugins/dsh-quiet-workspace/README.md) with neutral colors and system typography. The installer retains legacy blue-message and pixel-font dependencies without enabling them. Native plugins add Codex models and a macOS completion chime.
 
 | Package | Capability and setup |
 | --- | --- |
 | [`dsh-evidence-trust`](plugins/dsh-evidence-trust/README.md) | Session-scoped hash-chained tool Evidence Ledger, Unknown Registry, and an opt-in fail-closed Verification Gate. Audit-only by default; never stores raw tool outputs. |
 | [`dsh-codex-cli-models`](plugins/dsh-codex-cli-models/README.md) | Use locally authenticated Codex models with Harness history and tools; sign in through Settings → Codex CLI. |
+| [`dsh-prompt-pro`](plugins/dsh-prompt-pro/README.md) | Expand a draft through the locally authenticated Codex CLI with a monochrome composer icon and undo. |
+| [`dsh-composer-menu`](plugins/dsh-composer-menu/README.md) | Open files, projects, GitHub references, Skills, connectors, design guidelines, and plugins from the conversation plus menu. |
+| [`dsh-claude-cli-models`](plugins/dsh-claude-cli-models/README.md) | Read the local Claude CLI account's model catalog; inference requires that account's eligible plan or authorization. |
 | [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.md) | Play one chime per successful top-level turn on macOS. |
 | `dsh-context` | Inspect how the context is composed and how it changes. |
 | `billion-context` | Compress conversation context; configure its model-related settings locally. |
@@ -69,3 +72,5 @@ Use Node.js 24, the pnpm version in `package.json`, and a native host that match
 The manual [release build workflow](../.github/workflows/puregamma-desktop-release.yml) builds Windows and Apple Silicon on separate native runners. The source archive comes from the release commit. Run `node --test pg-harness/install.test.mjs pg-harness/plugin-patches/bundled-compat.test.mjs pg-harness/plugin-patches/univer-office/preview.test.mjs pg-harness/plugins/dsh-codex-cli-models/plugin.test.mjs pg-harness/plugins/dsh-task-completion-chime/plugin.test.mjs` for profile preservation and office preview regressions. The preview fixture exercises the shipped client with real React and includes the unpatched client's missing-preview case. The owning client and desktop tests cover the brand and packaging contracts.
 
 The app carries this directory in its resources. The Windows helper and Mac command use the bundled runtime to run `install.mjs`; optional plugins are added to the reserved desktop profile. The upstream MIT license and third-party notices apply, and the pixel font licenses are included under `licenses`.
+
+The MemOS 2.0.20-compat.1 adapter receives a version-scoped source fix for Session format v4: recall and auxiliary user messages use producer identities, and auxiliary assistant messages identify their model. The installer backs up both adapter files and retains the memory database and settings.
