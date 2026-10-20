@@ -4,7 +4,7 @@
 
 ![PureGamma Harness 燕子标志](pg-harness/assets/pg-harness-mark-ui.png)
 
-PureGamma Harness 将编程、浏览器自动化、办公、技能和上下文工具整合进一个可定制的智能体工作区。桌面版基于 DeepSeek Harness `dsh-v0.2.1-alpha.2`，保留其插件架构。首个 PureGamma 版本为 `puregamma-harness-v0.1.0`；内置引擎仍显示真实版本 `0.2.1-alpha.2`。
+PureGamma Harness 将编程、浏览器自动化、办公、技能和上下文工具整合进一个可定制的智能体工作区。桌面版内置 DeepSeek Harness `0.2.1-rc.2` 引擎，保留其插件架构。
 
 [下载桌面版](https://github.com/xxxxxwater/PureGamma-harness/releases) · [安装与插件说明](pg-harness/README.zh.md) · [用户指南](docs/user/guide/index.zh.md)
 
@@ -35,10 +35,11 @@ PureGamma Harness 将编程、浏览器自动化、办公、技能和上下文�
 
 ## 内置插件能力
 
-此版本包含 13 个第三方插件代码归档、4 个 PureGamma 界面插件，以及[版本清单](pg-harness/bundled-plugins/inventory.json)中的官方插件组合。源码包包含相同的插件代码。安装时优先保留已有插件版本和设置。
+此版本包含 14 个第三方插件代码归档、4 个 PureGamma 界面插件，以及[版本清单](pg-harness/bundled-plugins/inventory.json)中的官方插件组合。源码包包含相同的插件代码。安装时优先保留已有插件版本和设置。
 
 | 插件分组 | 包含的插件 |
 | --- | --- |
+| 提示词清洗 | `dsh-purge` 的“清洗”页面可在本机应用兼容补丁；重新启动并新建会话后使用清洗后的提示词。 |
 | 上下文与记忆 | `dsh-context`、`billion-context`、`@vectorize-io/hindsight-coding-agents` |
 | 编程工作区 | `dsh-better-sidebar`、`dsh-at-file` |
 | 技能 | `@linxin666/dsh-client-ui-skill-explorer`、`@dhicoc/dsh-reverse-skill` |
@@ -46,7 +47,7 @@ PureGamma Harness 将编程、浏览器自动化、办公、技能和上下文�
 | 办公与插件发现 | `dsh-univer-office`、`dshmarket` |
 | 视觉定制 | `open-sea-skin`、PureGamma 插件图标栏、代码主题、蓝色气泡与像素字体 |
 
-插件代码已经包含；MagicPath、SentinelX、Hindsight 等服务仍需各自在本机完成配置或认证。安装插件不等于已配置服务连接。详见[插件说明](pg-harness/README.zh.md#plugins-and-local-setup)。
+[dsh-purge 清洗指南](pg-harness/README.zh.md#dsh-purge-clean)介绍内置 `1.1.71-puregamma.3` 兼容版、“应用”与重启步骤，以及 MIT 上游来源。插件代码已经包含；MagicPath、SentinelX、Hindsight 等服务仍需各自在本机完成配置或认证。安装插件不等于已配置服务连接。详见[插件说明](pg-harness/README.zh.md#plugins-and-local-setup)。
 
 <a id="choose-a-download"></a>
 

@@ -23,7 +23,7 @@ You can move the Mac app after plugin installation. Mac builds are ad-hoc signed
 
 ## Plugins and local setup
 
-The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin archives, their exact versions, licenses, SHA-256 hashes, and the official bundles. The installer validates each new archive and retains an existing dependency's version, source, and enabled state. PureGamma UI packages provide integrated plugin navigation, IDE code colors, and a [quiet workspace](plugins/dsh-quiet-workspace/README.md) with neutral colors and system typography. The installer retains legacy blue-message and pixel-font dependencies without enabling them. Native plugins add Codex models and a macOS completion chime.
+The [inventory](bundled-plugins/inventory.json) records 14 third-party plugin archives, their exact versions, licenses, SHA-256 hashes, and the official bundles. The installer validates each new archive and retains an existing dependency's version, source, and enabled state. PureGamma UI packages provide integrated plugin navigation, IDE code colors, and a [quiet workspace](plugins/dsh-quiet-workspace/README.md) with neutral colors and system typography. The installer retains legacy blue-message and pixel-font dependencies without enabling them. Native plugins add Codex models and a macOS completion chime.
 
 | Package | Capability and setup |
 | --- | --- |
@@ -33,6 +33,7 @@ The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin ar
 | [`dsh-composer-menu`](plugins/dsh-composer-menu/README.md) | Open files, projects, GitHub references, Skills, connectors, design guidelines, and plugins from the conversation plus menu. |
 | [`dsh-claude-cli-models`](plugins/dsh-claude-cli-models/README.md) | Read the local Claude CLI account's model catalog; inference requires that account's eligible plan or authorization. |
 | [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.md) | Play one chime per successful top-level turn on macOS. |
+| `dsh-purge` | Open the Clean dock, apply local host patches, and start a new chat after restart; see [Clean](#dsh-purge-clean). |
 | `dsh-context` | Inspect how the context is composed and how it changes. |
 | `billion-context` | Compress conversation context; configure its model-related settings locally. |
 | `@vectorize-io/hindsight-coding-agents` | Integrate long-term coding memory; configure a Hindsight connection locally. |
@@ -48,6 +49,12 @@ The [inventory](bundled-plugins/inventory.json) records 13 third-party plugin ar
 | `open-sea-skin` | Display an optional ocean skin where WebGPU is supported. |
 
 The Codex model plugin requires the official Codex CLI installed locally. Every user authorizes their own ChatGPT account in the browser; an existing CLI login is reused automatically. Requests share that account’s Codex / ChatGPT Work allowance. The installer mounts the native provider instead of the earlier text-only `dsh-codex-cli` bundle and retains its dependency for rollback. Codex and Claude Code subagent bundles are part of the upstream source and runtime; their providers require local configuration. Included code does not supply any account, subscription, or API credentials. The capability rail shows mounted plugins and keeps pinned choices on the device; some entries open the relevant settings or tool panel rather than a dedicated page.
+
+<a id="dsh-purge-clean"></a>
+
+## dsh-purge Clean
+
+The bundled `dsh-purge` `1.1.71-puregamma.3` is a PureGamma compatibility build of [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) MIT tag `v1.1.71`. Open **dsh-purge** beside the session title, select **Clean**, then **Apply**. Apply patches the local Harness host and restarts it; begin a new chat for the cleaned prompt to take effect. The Intel macOS release already contains the host patch and the corrected prompt suffix. This build removes the unsupported `{{cwd}}` suffix on the `0.2.1-rc.2` engine and keeps the plugin prompt through that engine's final assembly. Existing sessions, plugins, settings, and credentials remain in the user profile.
 
 The installer also applies version-scoped compatibility patches to the shipped `dsh-at-file` 0.7.0, `dsh-magicpath` 0.1.0, and `billion-context` 0.1.190 packages after dependencies are installed. At-file keeps its live `@` picker, file filters, and enable switch, storing settings at `~/.dsh/pg-harness-state/dsh-at-file.json` (or under `DSH_HOME`); this avoids the removed `settings.register()` API. Both Host and browser strict Remote codecs use the current schema factories, and the picker waits for its Remote namespace to mount. MagicPath retains its official CLI commands and result fields with validated, supported tool JSON Schemas, and withdraws its tool registration on unload. Billion-context keeps its request interception and context compression but defaults to direct `fetch` wrapping rather than a global property accessor, avoiding interference with Node diagnostics; `BILI_RECLAIM_FETCH_PATCH=1` explicitly opts back into upstream accessor re-arming. Each changed entry point is backed up in the install's `pg-harness-backups` folder; different package versions remain untouched, and existing v1 repairs receive the codec and cleanup fixes without replacing settings. Restart Harness after running the plugin installer to load the fixes.
 

@@ -23,7 +23,7 @@
 
 ## 插件与本地配置
 
-[清单](bundled-plugins/inventory.json)记录 13 个第三方插件归档、确切版本、许可证、SHA-256 校验值及官方插件组合。安装程序校验新归档，并保留已有依赖的版本、来源与启用状态。PureGamma 界面插件提供整合式插件导航、IDE 代码配色，以及采用中性色和系统字体的[简洁工作空间](plugins/dsh-quiet-workspace/README.zh.md)。安装器保留旧版蓝色消息和像素字体依赖，但不启用它们。本机插件另外提供 Codex 模型和 macOS 任务完成提示音。
+[清单](bundled-plugins/inventory.json)记录 14 个第三方插件归档、确切版本、许可证、SHA-256 校验值及官方插件组合。安装程序校验新归档，并保留已有依赖的版本、来源与启用状态。PureGamma 界面插件提供整合式插件导航、IDE 代码配色，以及采用中性色和系统字体的[简洁工作空间](plugins/dsh-quiet-workspace/README.zh.md)。安装器保留旧版蓝色消息和像素字体依赖，但不启用它们。本机插件另外提供 Codex 模型和 macOS 任务完成提示音。
 
 | 插件 | 能力与配置 |
 | --- | --- |
@@ -33,6 +33,7 @@
 | [`dsh-composer-menu`](plugins/dsh-composer-menu/README.zh.md) | 从会话加号菜单打开文件、项目、GitHub 引用、Skills、连接器、设计规范与插件。 |
 | [`dsh-claude-cli-models`](plugins/dsh-claude-cli-models/README.zh.md) | 读取本机 Claude CLI 账号的模型目录；推理需要该账号具备相应订阅或授权。 |
 | [`dsh-task-completion-chime`](plugins/dsh-task-completion-chime/README.zh.md) | macOS 上每次主会话任务正常完成后播放一次提示音。 |
+| `dsh-purge` | 打开“清洗”页面，在本机应用宿主补丁，重启后新建会话；详见[清洗](#dsh-purge-clean)。 |
 | `dsh-context` | 查看上下文构成及其变化。 |
 | `billion-context` | 压缩会话上下文；在本机配置与模型有关的设置。 |
 | `@vectorize-io/hindsight-coding-agents` | 接入编程长期记忆；在本机配置 Hindsight 连接。 |
@@ -48,6 +49,12 @@
 | `open-sea-skin` | 在支持 WebGPU 的环境显示可选海洋皮肤。 |
 
 Codex 模型插件要求本机安装官方 Codex CLI。每位用户都需在浏览器授权自己的 ChatGPT 账号；已有 CLI 登录时自动复用。请求共享该账号的 Codex / ChatGPT Work 工作额度。安装器启用原生提供商，替换早期仅支持文本的 `dsh-codex-cli` 组合，并保留旧依赖以便回退。Codex 与 Claude Code 子智能体组合已包含在上游源码和运行时中；服务提供商仍需本机配置。内置代码不提供任何账户、订阅或 API 凭据。能力图标栏展示已挂载的插件，置顶选择保存在设备上；部分入口打开相应设置或工具面板，而非独立页面。
+
+<a id="dsh-purge-clean"></a>
+
+## dsh-purge 清洗
+
+内置的 `dsh-purge` `1.1.71-puregamma.3` 基于 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 MIT 许可 `v1.1.71` 标签制作兼容版。点击会话标题旁的 **dsh-purge**，进入 **清洗** 页面，再点 **应用**。应用会修补本机 Harness 宿主并重启；新建会话后清洗后的提示词才生效。Intel macOS 发布包已包含宿主补丁及修正后的提示词后缀。此兼容版移除了 `0.2.1-rc.2` 引擎不支持的 `{{cwd}}` 后缀，并确保插件提示词保留在该引擎最终组装结果中。原有会话、插件、设置和凭据仍保存在用户配置中。
 
 安装器也会在依赖安装完成后，仅对内置的 `dsh-at-file` 0.7.0、`dsh-magicpath` 0.1.0 和 `billion-context` 0.1.190 应用对应版本的兼容补丁。`at-file` 保留 `@` 文件选择、过滤规则和启用开关，设置独立持久化到 `~/.dsh/pg-harness-state/dsh-at-file.json`（或 `DSH_HOME` 所指目录），不再调用已移除的 `settings.register()`，宿主与浏览器的严格远程编解码器均使用新版 schema 工厂，文件选择器等待远程接口完成挂载；MagicPath 保留原始 CLI 命令与完整结果字段，改为新版工具注册接受的 JSON Schema，并在插件卸载时撤销工具注册；billion-context 保留请求处理与上下文压缩，但默认使用直接 `fetch` 包装，不再通过全局属性访问器与 Node 诊断产生冲突。如需显式恢复上游属性拦截模式，可设置 `BILI_RECLAIM_FETCH_PATCH=1`。安装器会在 `pg-harness-backups` 下备份所有改动的入口文件；非目标版本不会修改；已有 v1 补丁会获得编解码器与卸载清理修复，已保存设置保持不变。运行安装器后需重启 Harness。
 

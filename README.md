@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 ![PureGamma Harness swallow](pg-harness/assets/pg-harness-mark-ui.png)
 
-PureGamma Harness brings coding, browser automation, office work, skills, and context tools into one customizable agent workspace. This desktop edition builds on DeepSeek Harness `dsh-v0.2.1-alpha.2` and preserves its plugin architecture. The first PureGamma release is `puregamma-harness-v0.1.0`; the bundled engine reports its real version, `0.2.1-alpha.2`.
+PureGamma Harness brings coding, browser automation, office work, skills, and context tools into one customizable agent workspace. This desktop edition ships the DeepSeek Harness `0.2.1-rc.2` engine and preserves its plugin architecture.
 
 [Download the desktop release](https://github.com/xxxxxwater/PureGamma-harness/releases) · [Installation and plugin guide](pg-harness/README.md) · [User guide](docs/user/guide/index.md)
 
@@ -35,10 +35,11 @@ The conversation turn rail displays compact marks beside the conversation. Hover
 
 ## Included plugin capabilities
 
-The edition includes 13 third-party plugin code archives, four PureGamma UI packages, and the official bundles in the [versioned inventory](pg-harness/bundled-plugins/inventory.json). The source archive includes the same plugin code. Existing installed versions and settings take precedence during installation.
+The edition includes 14 third-party plugin code archives, four PureGamma UI packages, and the official bundles in the [versioned inventory](pg-harness/bundled-plugins/inventory.json). The source archive includes the same plugin code. Existing installed versions and settings take precedence during installation.
 
 | Plugin group | Included packages |
 | --- | --- |
+| Prompt cleaning | `dsh-purge` Clean applies local host compatibility patches; start a new conversation to use the cleaned prompt. |
 | Context and memory | `dsh-context`, `billion-context`, `@vectorize-io/hindsight-coding-agents` |
 | Coding workspace | `dsh-better-sidebar`, `dsh-at-file` |
 | Skills | `@linxin666/dsh-client-ui-skill-explorer`, `@dhicoc/dsh-reverse-skill` |
@@ -46,7 +47,7 @@ The edition includes 13 third-party plugin code archives, four PureGamma UI pack
 | Office and discovery | `dsh-univer-office`, `dshmarket` |
 | Visual customization | `open-sea-skin`, PureGamma plugin rail, code theme, blue bubbles, and pixel fonts |
 
-Plugin code is included; services such as MagicPath, SentinelX, and Hindsight still require their own local setup or authentication. Installation does not prove that a provider connection has been configured. See the [plugin guide](pg-harness/README.md#plugins-and-local-setup) for details.
+The [dsh-purge Clean guide](pg-harness/README.md#dsh-purge-clean) covers the shipped `1.1.71-puregamma.3` compatibility build, the Apply/restart flow, and its MIT upstream source. Plugin code is included; services such as MagicPath, SentinelX, and Hindsight still require their own local setup or authentication. Installation does not prove that a provider connection has been configured. See the [plugin guide](pg-harness/README.md#plugins-and-local-setup) for details.
 
 <a id="choose-a-download"></a>
 

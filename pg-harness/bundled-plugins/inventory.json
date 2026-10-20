@@ -31,7 +31,8 @@
     "@deepseek-ai/dsh-subagent-codex",
     "@deepseek-ai/dsh-subagent-claude-code",
     "dsh-plugin-rail",
-    "dsh-quiet-workspace"
+    "dsh-quiet-workspace",
+    "dsh-purge"
   ],
   "plugins": [
     {
@@ -105,6 +106,14 @@
       "archive": "dsh-magicpath-0.1.0.tgz",
       "sha256": "d2fe3cb067bdaeb5828ee144b479c8aef9c98b3a6a5fc2543ec8a2ecf9de3fc1",
       "unpackedSize": 36049
+    },
+    {
+      "name": "dsh-purge",
+      "version": "1.1.71-puregamma.3",
+      "license": "MIT",
+      "archive": "dsh-purge-1.1.71-puregamma.3.tgz",
+      "sha256": "b2dfd1b4f2297624392a81c9ee619a50c70aac20fb04f58830f3d8cefcb7c891",
+      "unpackedSize": 3350614
     },
     {
       "name": "dsh-sentinelx",
