@@ -6,6 +6,9 @@ on:
 permissions:
   contents: read
 
+env:
+  RELEASE_VERSION: 0.2.1-rc.2-purge.2
+
 concurrency:
   group: puregamma-desktop-release-${{ github.ref }}
   cancel-in-progress: false
@@ -43,12 +46,16 @@ jobs:
         run: |
           pnpm run package:desktop:win:x64:unsigned
           exit $LASTEXITCODE
+      - name: Verify bundled plugins in packaged Windows app
+        run: |
+          node scripts/verify-puregamma-bundled-plugins.mjs apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/win-unpacked/resources/pg-harness
+          exit $LASTEXITCODE
       - name: Stage verified installer
         run: |
           New-Item -ItemType Directory -Path release-assets | Out-Null
           $installers = @(Get-ChildItem apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe)
           if ($installers.Count -ne 1) { throw 'Expected one verified EXE installer' }
-          Copy-Item -LiteralPath $installers[0].FullName -Destination release-assets/puregamma-harness-v0.1.0-windows-x64.exe
+          Copy-Item -LiteralPath $installers[0].FullName -Destination "release-assets/puregamma-harness-v$env:RELEASE_VERSION-windows-x64.exe"
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: puregamma-windows-x64
@@ -92,14 +99,29 @@ jobs:
         run: pnpm run package:desktop:mac:arm64:unsigned --dir
       - name: Stage app, plugin installer, and guides
         run: |
-          mkdir -p release-assets stage/PureGamma-Harness-0.1.0
-          cp -R 'apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/PureGamma Harness.app' stage/PureGamma-Harness-0.1.0/
-          cp 'pg-harness/Install PureGamma Harness.command' pg-harness/README.md pg-harness/README.zh.md stage/PureGamma-Harness-0.1.0/
-          chmod +x 'stage/PureGamma-Harness-0.1.0/Install PureGamma Harness.command'
-          mkdir -p stage/PureGamma-Harness-0.1.0/bundled-plugins
-          cp pg-harness/bundled-plugins/inventory.json stage/PureGamma-Harness-0.1.0/bundled-plugins/
-          codesign --verify --deep --strict 'stage/PureGamma-Harness-0.1.0/PureGamma Harness.app'
-          ditto -c -k --sequesterRsrc --keepParent stage/PureGamma-Harness-0.1.0 release-assets/puregamma-harness-v0.1.0-macos-arm64.zip
+          stage_dir="stage/PureGamma-Harness-${RELEASE_VERSION}"
+          archive="release-assets/puregamma-harness-v${RELEASE_VERSION}-macos-arm64.zip"
+          mkdir -p release-assets "$stage_dir/bundled-plugins"
+          cp -R 'apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/PureGamma Harness.app' "$stage_dir/"
+          cp 'pg-harness/Install PureGamma Harness.command' pg-harness/README.md pg-harness/README.zh.md "$stage_dir/"
+          chmod +x "$stage_dir/Install PureGamma Harness.command"
+          cp pg-harness/bundled-plugins/inventory.json "$stage_dir/bundled-plugins/"
+          node scripts/verify-puregamma-bundled-plugins.mjs "$stage_dir/PureGamma Harness.app/Contents/Resources/pg-harness"
+          codesign --verify --deep --strict "$stage_dir/PureGamma Harness.app"
+          ditto -c -k --norsrc --keepParent "$stage_dir" "$archive"
+      - name: Verify distributable ZIP after extraction
+        run: |
+          archive="release-assets/puregamma-harness-v${RELEASE_VERSION}-macos-arm64.zip"
+          unzip -tq "$archive"
+          if unzip -Z1 "$archive" | grep -q '^__MACOSX/'; then
+            echo 'ZIP contains unnecessary AppleDouble metadata' >&2
+            exit 1
+          fi
+          mkdir -p extracted
+          ditto -x -k --norsrc "$archive" extracted
+          app="extracted/PureGamma-Harness-${RELEASE_VERSION}/PureGamma Harness.app"
+          codesign --verify --deep --strict "$app"
+          node scripts/verify-puregamma-bundled-plugins.mjs "$app/Contents/Resources/pg-harness"
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: puregamma-macos-arm64
