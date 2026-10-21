@@ -109,11 +109,11 @@
     },
     {
       "name": "dsh-purge",
-      "version": "1.1.71-puregamma.3",
+      "version": "1.1.71-puregamma.4",
       "license": "MIT",
-      "archive": "dsh-purge-1.1.71-puregamma.3.tgz",
-      "sha256": "b2dfd1b4f2297624392a81c9ee619a50c70aac20fb04f58830f3d8cefcb7c891",
-      "unpackedSize": 3350614
+      "archive": "dsh-purge-1.1.71-puregamma.4.tgz",
+      "sha256": "63ab46e23019240291543a45b63364317f9170d270ac1f5fd0bd087d093eaaff",
+      "unpackedSize": 3352226
     },
     {
       "name": "dsh-sentinelx",

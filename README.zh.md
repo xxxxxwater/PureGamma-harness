@@ -47,7 +47,7 @@ PureGamma Harness 将编程、浏览器自动化、办公、技能和上下文�
 | 办公与插件发现 | `dsh-univer-office`、`dshmarket` |
 | 视觉定制 | `open-sea-skin`、PureGamma 插件图标栏、代码主题、蓝色气泡与像素字体 |
 
-[dsh-purge 清洗指南](pg-harness/README.zh.md#dsh-purge-clean)介绍内置 `1.1.71-puregamma.3` 兼容版、“应用”与重启步骤，以及 MIT 上游来源。插件代码已经包含；MagicPath、SentinelX、Hindsight 等服务仍需各自在本机完成配置或认证。安装插件不等于已配置服务连接。详见[插件说明](pg-harness/README.zh.md#plugins-and-local-setup)。
+[dsh-purge 清洗指南](pg-harness/README.zh.md#dsh-purge-clean)介绍内置 `1.1.71-puregamma.4` 兼容版、“应用”与重启步骤、`{{cwd}}` 修复，以及解决普通会话 `PI_AI_ERROR` 的兼容默认提示，并注明 MIT 上游来源。插件代码已经包含；MagicPath、SentinelX、Hindsight 等服务仍需各自在本机完成配置或认证。安装插件不等于已配置服务连接。详见[插件说明](pg-harness/README.zh.md#plugins-and-local-setup)。
 
 <a id="choose-a-download"></a>
 

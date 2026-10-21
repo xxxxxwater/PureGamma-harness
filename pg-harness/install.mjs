@@ -60,8 +60,15 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
   if (existsSync(inventoryPath)) {
     const inventory = JSON.parse(readFileSync(inventoryPath, 'utf8'))
     for (const plugin of inventory.plugins) {
-      // A user's installed version, dependency source and settings take precedence.
-      if (manifest.dependencies[plugin.name] !== undefined) continue
+      // A user's installed version and source take precedence. Only replace the
+      // previous PureGamma-bundled purge archive, whose default prompt could
+      // cause PI_AI_ERROR; never replace a separately installed dsh-purge.
+      const previous = manifest.dependencies[plugin.name]
+      const priorBundledPurge = plugin.name === 'dsh-purge'
+        && typeof previous === 'string'
+        && previous.replaceAll('\\', '/').includes('bundled-plugin-archives/')
+        && previous.endsWith('dsh-purge-1.1.71-puregamma.3.tgz')
+      if (previous !== undefined && !priorBundledPurge) continue
       const archive = join(dirname(inventoryPath), plugin.archive)
       if (createHash('sha256').update(readFileSync(archive)).digest('hex') !== plugin.sha256) {
         throw new Error('Bundled plugin archive failed its integrity check: ' + plugin.name)
@@ -72,7 +79,9 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
       manifest.dependencies[plugin.name] = 'file:../../bundled-plugin-archives/' + plugin.archive
     }
     for (const bundle of inventory.bundles) {
-      if (alreadyInstalled.has(bundle) && !manifest.dsh.profile.bundles.includes(bundle)) continue
+      // The requested Clean capability must be mounted even when an earlier
+      // broken purge install left its dependency present but its bundle off.
+      if (bundle !== 'dsh-purge' && alreadyInstalled.has(bundle) && !manifest.dsh.profile.bundles.includes(bundle)) continue
       if (!manifest.dsh.profile.bundles.includes(bundle)) manifest.dsh.profile.bundles.push(bundle)
     }
   }
@@ -93,7 +102,13 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
   const profile = join(home, 'profiles', 'desktop')
   const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
   const missing = Object.keys(manifest.dependencies).some(name => !existsSync(join(profile, 'node_modules', name, 'package.json')))
-  if (missing) {
+  const purgeArchive = manifest.dependencies['dsh-purge'] || ''
+  const purgeVersion = existsSync(join(profile, 'node_modules', 'dsh-purge', 'package.json'))
+    ? JSON.parse(readFileSync(join(profile, 'node_modules', 'dsh-purge', 'package.json'), 'utf8')).version
+    : ''
+  const purgeUpgradePending = purgeArchive.includes('bundled-plugin-archives/dsh-purge-1.1.71-puregamma.4.tgz')
+    && purgeVersion !== '1.1.71-puregamma.4'
+  if (missing || purgeUpgradePending) {
     const resources = resolve(dirname(fileURLToPath(import.meta.url)), '..')
     const pnpm = join(resources, 'runtime', 'primary-runtime', 'dependencies', 'pnpm', 'bin', 'pnpm.mjs')
     if (!existsSync(pnpm)) throw new Error('Run the installer beside the packaged PureGamma Harness app.')

@@ -54,7 +54,7 @@ Codex 模型插件要求本机安装官方 Codex CLI。每位用户都需在浏�
 
 ## dsh-purge 清洗
 
-内置的 `dsh-purge` `1.1.71-puregamma.3` 基于 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 MIT 许可 `v1.1.71` 标签制作兼容版。点击会话标题旁的 **dsh-purge**，进入 **清洗** 页面，再点 **应用**。应用会修补本机 Harness 宿主并重启；新建会话后清洗后的提示词才生效。Intel macOS 发布包已包含宿主补丁及修正后的提示词后缀。此兼容版移除了 `0.2.1-rc.2` 引擎不支持的 `{{cwd}}` 后缀，并确保插件提示词保留在该引擎最终组装结果中。原有会话、插件、设置和凭据仍保存在用户配置中。
+内置的 `dsh-purge` `1.1.71-puregamma.4` 基于 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的 MIT 许可 `v1.1.71` 标签制作兼容版。点击会话标题旁的 **dsh-purge**，进入 **清洗** 页面，再点 **应用**。应用会修补本机 Harness 宿主并重启原生应用；新建会话后清洗后的提示词才生效。Intel macOS 发布包已包含宿主补丁及修正后的提示词后缀。此兼容版移除了 `0.2.1-rc.2` 引擎不支持的 `{{cwd}}` 后缀，确保插件提示词保留在最终组装结果中，并以简短的兼容默认提示替换会使 `modlens-discovery` 普通会话触发 `PI_AI_ERROR` 的上游默认提示。用户自己编写的提示词会保留。原有会话、插件、设置和凭据仍保存在用户配置中。
 
 安装器也会在依赖安装完成后，仅对内置的 `dsh-at-file` 0.7.0、`dsh-magicpath` 0.1.0 和 `billion-context` 0.1.190 应用对应版本的兼容补丁。`at-file` 保留 `@` 文件选择、过滤规则和启用开关，设置独立持久化到 `~/.dsh/pg-harness-state/dsh-at-file.json`（或 `DSH_HOME` 所指目录），不再调用已移除的 `settings.register()`，宿主与浏览器的严格远程编解码器均使用新版 schema 工厂，文件选择器等待远程接口完成挂载；MagicPath 保留原始 CLI 命令与完整结果字段，改为新版工具注册接受的 JSON Schema，并在插件卸载时撤销工具注册；billion-context 保留请求处理与上下文压缩，但默认使用直接 `fetch` 包装，不再通过全局属性访问器与 Node 诊断产生冲突。如需显式恢复上游属性拦截模式，可设置 `BILI_RECLAIM_FETCH_PATCH=1`。安装器会在 `pg-harness-backups` 下备份所有改动的入口文件；非目标版本不会修改；已有 v1 补丁会获得编解码器与卸载清理修复，已保存设置保持不变。运行安装器后需重启 Harness。
 

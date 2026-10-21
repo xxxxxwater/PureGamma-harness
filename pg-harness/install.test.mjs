@@ -1,6 +1,8 @@
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { execFileSync } from 'node:child_process'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { install } from './install.mjs'
@@ -57,6 +59,65 @@ test('installing local UI updates preserves an already-installed disabled bundle
     const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(result.dependencies['billion-context'], '0.1.199')
     assert.ok(!result.dsh.profile.bundles.includes('billion-context'))
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+test('upgrades only the prior PureGamma-bundled dsh-purge archive', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-purge-upgrade-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: {
+        'dsh-purge': 'file:' + join(home, 'bundled-plugin-archives', 'dsh-purge-1.1.71-puregamma.3.tgz'),
+        retained: '3.2.1',
+      },
+      dsh: { profile: { bundles: ['retained'] } },
+    }))
+    writeFileSync(join(home, 'prompt-inject.md'), 'user prompt remains\n')
+    install(home)
+    const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(result.dependencies['dsh-purge'], 'file:../../bundled-plugin-archives/dsh-purge-1.1.71-puregamma.4.tgz')
+    assert.equal(result.dependencies.retained, '3.2.1')
+    assert.equal(readFileSync(join(home, 'prompt-inject.md'), 'utf8'), 'user prompt remains\n')
+    assert.equal(result.dsh.profile.bundles.filter(name => name === 'dsh-purge').length, 1)
+    result.dependencies['dsh-purge'] = 'link:../../local-plugins/dsh-purge'
+    writeFileSync(join(profile, 'package.json'), JSON.stringify(result))
+    install(home)
+    const custom = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(custom.dependencies['dsh-purge'], 'link:../../local-plugins/dsh-purge')
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+test('bundled purge refreshes its old default prompt and recognizes the native app for restart', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-purge-compat-'))
+  try {
+    const archive = new URL('./bundled-plugins/dsh-purge-1.1.71-puregamma.4.tgz', import.meta.url)
+    execFileSync('tar', ['-xzf', fileURLToPath(archive), '-C', home])
+    const plugin = join(home, 'package')
+    const core = await import(pathToFileURL(join(plugin, 'lib', 'core.js')).href)
+    const desktop = await import(pathToFileURL(join(plugin, 'lib', 'desktop.js')).href)
+    const prompt = core.defaultOverrideText()
+    assert.ok(prompt.includes('PureGamma Harness'))
+    assert.ok(prompt.length < 512)
+    assert.ok(!prompt.includes('UNRESTRICTED'))
+    const dshHome = join(home, 'profile')
+    mkdirSync(join(dshHome, 'dsh-purge'), { recursive: true })
+    const old = '<|im_start|>system:<project_instructions>Little Code Sauce</project_instructions>'
+    writeFileSync(join(dshHome, 'prompt-inject.md'), old)
+    writeFileSync(join(dshHome, 'dsh-purge', 'override-state.json'), JSON.stringify({
+      customized: false, hash: core.hashOverride(old), seedHash: core.hashOverride(old),
+    }))
+    assert.equal(core.syncPromptInjectOnDiskSync(dshHome).action, 'wrote')
+    assert.equal(readFileSync(join(dshHome, 'prompt-inject.md'), 'utf8'), prompt)
+    writeFileSync(join(dshHome, 'prompt-inject.md'), 'User-authored prompt')
+    assert.equal(core.syncPromptInjectOnDiskSync(dshHome).reason, 'user_custom')
+    assert.equal(readFileSync(join(dshHome, 'prompt-inject.md'), 'utf8'), 'User-authored prompt')
+    const exe = join(home, 'PureGamma Harness.app', 'Contents', 'MacOS', 'PureGamma Harness')
+    mkdirSync(join(home, 'PureGamma Harness.app', 'Contents', 'MacOS'), { recursive: true })
+    writeFileSync(exe, '')
+    assert.equal(desktop.restartPlan({ execPath: exe }).execPath, exe)
+    assert.equal(desktop.desktopRestartChoice({ platform: 'darwin', exe }), 'helper')
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
 

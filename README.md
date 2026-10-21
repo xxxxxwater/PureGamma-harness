@@ -47,7 +47,7 @@ The edition includes 14 third-party plugin code archives, four PureGamma UI pack
 | Office and discovery | `dsh-univer-office`, `dshmarket` |
 | Visual customization | `open-sea-skin`, PureGamma plugin rail, code theme, blue bubbles, and pixel fonts |
 
-The [dsh-purge Clean guide](pg-harness/README.md#dsh-purge-clean) covers the shipped `1.1.71-puregamma.3` compatibility build, the Apply/restart flow, and its MIT upstream source. Plugin code is included; services such as MagicPath, SentinelX, and Hindsight still require their own local setup or authentication. Installation does not prove that a provider connection has been configured. See the [plugin guide](pg-harness/README.md#plugins-and-local-setup) for details.
+The [dsh-purge Clean guide](pg-harness/README.md#dsh-purge-clean) covers the shipped `1.1.71-puregamma.4` compatibility build, the Apply/restart flow, the `{{cwd}}` fix, and the provider-compatible default prompt that resolves `PI_AI_ERROR` in ordinary chats. The build credits its MIT upstream source. Plugin code is included; services such as MagicPath, SentinelX, and Hindsight still require their own local setup or authentication. Installation does not prove that a provider connection has been configured. See the [plugin guide](pg-harness/README.md#plugins-and-local-setup) for details.
 
 <a id="choose-a-download"></a>
 
