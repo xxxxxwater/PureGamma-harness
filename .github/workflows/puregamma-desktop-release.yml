@@ -8,6 +8,11 @@ on:
         type: string
         required: true
         default: 0.2.2-alpha.2-pg.1
+      arm64_runner:
+        description: GitHub-hosted Apple Silicon runner image for the arm64 build
+        type: choice
+        options: [macos-15, macos-26, macos-14]
+        default: macos-15
 
 permissions:
   contents: read
@@ -80,7 +85,7 @@ jobs:
           retention-days: 14
   mac-arm64:
     name: Apple Silicon macOS
-    runs-on: macos-15
+    runs-on: ${{ inputs.arm64_runner || 'macos-15' }}
     timeout-minutes: 120
     env:
       DSH_TELEMETRY_DISABLED: '1'
