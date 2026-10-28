@@ -44,6 +44,31 @@ jobs:
           node --check pg-harness/plugins/dsh-evidence-trust/sign-attestation.mjs
           node --check pg-harness/plugins/dsh-evidence-trust/verify-ci-and-sign.mjs
           node --test pg-harness/plugins/dsh-evidence-trust/*.test.mjs
+      - name: Validate CLI model, prompt and plugin-patch tests
+        run: |
+          node --test \
+            pg-harness/plugins/dsh-claude-cli-models/plugin.test.mjs \
+            pg-harness/plugins/dsh-codex-cli-models/plugin.test.mjs \
+            pg-harness/plugins/dsh-codex-cli/index.test.mjs \
+            pg-harness/plugins/dsh-prompt-pro/plugin.test.mjs \
+            pg-harness/plugin-patches/memos-sources.test.mjs
+      - name: Install DOM test dependencies without the full workspace
+        # Pinned to the versions in pnpm-lock.yaml; linked as the repo-root
+        # node_modules so the tests' createRequire lookups resolve them.
+        run: |
+          set -eu
+          deps="$RUNNER_TEMP/pg-dom-test-deps"
+          mkdir -p "$deps"
+          printf '%s\n' '{"private":true}' > "$deps/package.json"
+          npm install --prefix "$deps" --no-audit --no-fund --ignore-scripts \
+            jsdom@29.1.1 react@18.3.1 react-dom@18.3.1
+          ln -s "$deps/node_modules" node_modules
+      - name: Validate DOM-rendered plugin UI tests
+        run: |
+          node --test \
+            pg-harness/plugins/dsh-composer-menu/plugin.test.mjs \
+            pg-harness/plugins/dsh-plugin-rail/plugin.test.mjs \
+            pg-harness/plugin-patches/univer-office/preview.test.mjs
 
   rea-published-bundle:
     name: Verify published REA Desktop bundle

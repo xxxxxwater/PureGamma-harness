@@ -48,8 +48,8 @@ jobs:
           test -n "$PG_TRUST_CI_PRIVATE_KEY"
           test -n "$PG_TRUST_CI_KEY_ID"
           test -n "$PG_TRUST_CI_WORKFLOW_ID"
-          printf '%s' "$PG_TRUST_CI_PRIVATE_KEY" > "$PG_TRUST_CI_KEY_FILE"
           trap 'rm -f "$PG_TRUST_CI_KEY_FILE"' EXIT
+          printf '%s' "$PG_TRUST_CI_PRIVATE_KEY" > "$PG_TRUST_CI_KEY_FILE"
           node pg-harness/plugins/dsh-evidence-trust/verify-ci-and-sign.mjs
       - uses: actions/upload-artifact@v4
         with:

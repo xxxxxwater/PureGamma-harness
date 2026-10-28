@@ -7,6 +7,11 @@ on:
         description: Completed PureGamma native-build run ID
         type: string
         required: true
+      version:
+        description: Release version without the v prefix (tag puregamma-harness-v<version>)
+        type: string
+        required: true
+        default: '0.1.0'
 
 permissions:
   actions: read
@@ -24,14 +29,17 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       BUILD_RUN: ${{ inputs.build_run }}
+      RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - name: Bind passing platform artifacts to the existing release
         id: verify
         run: |
           [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          echo "RELEASE_TAG=puregamma-harness-v$RELEASE_VERSION" >> "$GITHUB_ENV"
           gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN" > build-run.json
           gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN/jobs?per_page=100" > build-jobs.json
-          gh api "repos/$GH_REPO/releases/tags/puregamma-harness-v0.1.0" > release.json
+          gh api "repos/$GH_REPO/releases/tags/puregamma-harness-v$RELEASE_VERSION" > release.json
           node - <<'JS'
           const fs = require('node:fs');
           const run = JSON.parse(fs.readFileSync('build-run.json'));
@@ -57,7 +65,7 @@ jobs:
           gh run download "$BUILD_RUN" --name puregamma-macos-arm64 --dir release-assets/mac
       - name: Archive the exact release source and all bundled plugin code
         run: |
-          git archive --format=zip --prefix=PureGamma-Harness-0.1.0-source/ --output=release-assets/puregamma-harness-v0.1.0-source.zip HEAD
+          git archive --format=zip --prefix="PureGamma-Harness-$RELEASE_VERSION-source/" --output="release-assets/puregamma-harness-v$RELEASE_VERSION-source.zip" HEAD
           node - <<'JS'
           const fs = require('node:fs');
           const crypto = require('node:crypto');
@@ -68,8 +76,11 @@ jobs:
           JS
       - name: Upload verified Windows installer
         run: |
-          gh release upload puregamma-harness-v0.1.0 --clobber release-assets/windows/*.exe
+          gh release upload "$RELEASE_TAG" --clobber release-assets/windows/*.exe
       - name: Upload verified Apple Silicon installer
         if: steps.verify.outputs.include_arm == 'true'
         run: |
-          gh release upload puregamma-harness-v0.1.0 --clobber release-assets/mac/*.zip
+          gh release upload "$RELEASE_TAG" --clobber release-assets/mac/*.zip
+      - name: Upload the exact release source archive
+        run: |
+          gh release upload "$RELEASE_TAG" --clobber "release-assets/puregamma-harness-v$RELEASE_VERSION-source.zip"
