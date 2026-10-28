@@ -5,21 +5,82 @@
  * distinct Harness operations. This is an explicit installer opt-in, not a
  * background plugin-manager mutation. Never touch pnpm allowBuilds.
  */
-import { constants, copyFileSync, existsSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { constants, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const REA_BUNDLE = 'dsh-rea-bundle'
 export const REA_BUNDLE_VERSION = '0.2.0'
+export const REA_RELEASE_ARCHIVE = 'dsh-rea-bundle-0.2.0.tgz'
 // Pinned standalone bundle release, not the repo root (which has prepare).
-export const REA_RELEASE_SPEC =
-  'https://github.com/xxxxxwater/rea/releases/download/dsh-v0.2.0/dsh-rea-bundle-0.2.0.tgz'
-// Metadata for operators verifying the versioned release through GitHub.
+// GitHub release assets are mutable, so the installer never hands this URL to
+// pnpm directly: it downloads the archive, verifies REA_RELEASE_SHA256 and
+// installs the verified local copy via a file: spec.
+export const REA_RELEASE_URL =
+  'https://github.com/xxxxxwater/rea/releases/download/dsh-v0.2.0/' + REA_RELEASE_ARCHIVE
 export const REA_RELEASE_SHA256 =
   '011e78aebde2b71577286869b65719af83de888e01313445e744999d78844630'
+// Dependency spec written into the Desktop profile (relative to profiles/desktop).
+export const REA_RELEASE_SPEC = 'file:../../bundled-plugin-archives/' + REA_RELEASE_ARCHIVE
+// Earlier PureGamma installers wrote the unverified release URL; migrate it.
+export const REA_LEGACY_SPECS = Object.freeze([REA_RELEASE_URL])
+
+function sha256File(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
+}
+
+/** Synchronously download url to file using a child Node process (fetch). */
+export function downloadFileSync(url, file) {
+  const script = [
+    "const [url, file] = process.argv.slice(-2)",
+    "const res = await fetch(url, { redirect: 'follow' })",
+    "if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url)",
+    "const { writeFileSync } = await import('node:fs')",
+    "writeFileSync(file, Buffer.from(await res.arrayBuffer()), { flag: 'wx', mode: 0o600 })",
+  ].join('\n')
+  execFileSync(process.execPath, ['--input-type=module', '-e', script, url, file], {
+    stdio: ['ignore', 'ignore', 'inherit'],
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NODE_OPTIONS: '' },
+    timeout: 300000,
+  })
+}
+
+/**
+ * Ensure the pinned REA archive is present under home/bundled-plugin-archives
+ * and matches REA_RELEASE_SHA256. An existing verified copy is reused; a
+ * mismatching download is deleted and the install fails closed.
+ * @returns absolute path of the verified archive.
+ */
+export function ensureReaReleaseArchive(home, {
+  download = downloadFileSync, url = REA_RELEASE_URL, sha256 = REA_RELEASE_SHA256,
+} = {}) {
+  const destination = join(home, 'bundled-plugin-archives', REA_RELEASE_ARCHIVE)
+  if (existsSync(destination) && sha256File(destination) === sha256) return destination
+  mkdirSync(dirname(destination), { recursive: true })
+  const pending = destination + '.' + process.pid + '-' + randomBytes(4).toString('hex') + '.download'
+  try {
+    download(url, pending)
+    const actual = existsSync(pending) ? sha256File(pending) : 'missing'
+    if (actual !== sha256) {
+      throw new Error('REA release archive failed its integrity check (expected sha256 '
+        + sha256 + ', got ' + actual + '); refusing to install it')
+    }
+    renameSync(pending, destination)
+  } finally {
+    if (existsSync(pending)) unlinkSync(pending)
+  }
+  return destination
+}
+
+/** Whether selectReaBundle would (re)write the pinned archive spec. */
+export function reaArchiveNeeded(manifest) {
+  const previous = manifest?.dependencies?.[REA_BUNDLE]
+  return previous === undefined || REA_LEGACY_SPECS.includes(previous)
+}
 
 /**
  * Explicitly select REA as part of the user-requested PureGamma install.
@@ -43,7 +104,7 @@ export function selectReaBundle(manifest) {
   if (previous !== undefined && (typeof previous !== 'string' || !previous.trim())) {
     throw new Error('Existing dsh-rea-bundle dependency spec is invalid; refusing to override it')
   }
-  const addedDependency = previous === undefined
+  const addedDependency = previous === undefined || REA_LEGACY_SPECS.includes(previous)
   if (addedDependency) deps[REA_BUNDLE] = REA_RELEASE_SPEC
   const enabledNow = !bundles.includes(REA_BUNDLE)
   if (enabledNow) bundles.push(REA_BUNDLE)

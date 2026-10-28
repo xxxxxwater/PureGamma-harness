@@ -4,7 +4,8 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, utimesSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { REA_BUNDLE, REA_RELEASE_SPEC, selectReaBundle, inspectReaBundle, activateInstalledReaBundle } from './rea-plugin.mjs'
+import { createHash } from 'node:crypto'
+import { REA_BUNDLE, REA_RELEASE_ARCHIVE, REA_RELEASE_SPEC, REA_RELEASE_URL, ensureReaReleaseArchive, selectReaBundle, inspectReaBundle, activateInstalledReaBundle } from './rea-plugin.mjs'
 
 function withHome(fn) {
   const home = mkdtempSync(join(tmpdir(), 'pg-rea-'))
@@ -198,5 +199,30 @@ test('already enabled REA requires no write or backup', () => {
     assert.equal(result.changed, false)
     assert.deepEqual(readFileSync(manifest), before)
     assert.equal(readdirSync(profile).filter(x => x.startsWith('package.json.rea-backup-')).length, 0)
+  })
+})
+
+test('REA release spec is a verified local archive and the legacy URL spec is migrated', () => {
+  assert.equal(REA_RELEASE_SPEC, 'file:../../bundled-plugin-archives/' + REA_RELEASE_ARCHIVE)
+  const doc = { dependencies: { [REA_BUNDLE]: REA_RELEASE_URL }, dsh: { profile: { bundles: [] } } }
+  assert.equal(selectReaBundle(doc).source, REA_RELEASE_SPEC)
+})
+
+test('ensureReaReleaseArchive verifies sha256 and fails closed on mismatch', () => {
+  withHome(home => {
+    const body = Buffer.from('rea archive bytes')
+    const sha256 = createHash('sha256').update(body).digest('hex')
+    const dir = join(home, 'bundled-plugin-archives')
+    assert.throws(() => ensureReaReleaseArchive(home, { sha256, download: (_u, f) => writeFileSync(f, 'tampered') }),
+      /integrity check/)
+    assert.deepEqual(readdirSync(dir), [])
+    assert.throws(() => ensureReaReleaseArchive(home, { sha256, download: () => { throw new Error('offline') } }), /offline/)
+    assert.deepEqual(readdirSync(dir), [])
+    const path = ensureReaReleaseArchive(home, { sha256, download: (_u, f) => writeFileSync(f, body) })
+    assert.equal(path, join(dir, REA_RELEASE_ARCHIVE))
+    assert.deepEqual(readFileSync(path), body)
+    writeFileSync(path, 'corrupted cache')
+    ensureReaReleaseArchive(home, { sha256, download: (_u, f) => writeFileSync(f, body) })
+    assert.deepEqual(readFileSync(path), body)
   })
 })

@@ -10,6 +10,7 @@ REA Git 仓库的 CLI 根包。目标是在 Desktop 会话中使用
 | --- | --- |
 | 插件 | `dsh-rea-bundle@0.2.0` |
 | 默认安装地址 | `https://github.com/xxxxxwater/rea/releases/download/dsh-v0.2.0/dsh-rea-bundle-0.2.0.tgz` |
+| 实际写入的依赖 | `file:../../bundled-plugin-archives/dsh-rea-bundle-0.2.0.tgz`（先下载并校验下方 SHA-256，不匹配则中止安装） |
 | 已发布归档 SHA-256 | `011e78aebde2b71577286869b65719af83de888e01313445e744999d78844630` |
 | 插件依赖的 REA 引擎 | `rea-agents@6.4.0` |
 | 另一种 Git 发行标签 | `https://github.com/xxxxxwater/rea#dsh-plugin-v0.2.0` |

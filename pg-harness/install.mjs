@@ -7,14 +7,15 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installUniverPreviewBridge } from './plugin-patches/univer-office/patch.mjs'
 import { installBundledPluginCompatibility } from './plugin-patches/bundled-compat.mjs'
-import { selectReaBundle } from './rea-plugin.mjs'
+import { ensureReaReleaseArchive, reaArchiveNeeded, selectReaBundle } from './rea-plugin.mjs'
 
 /**
  * Install PureGamma UI packages into the reserved desktop profile with reversible backups.
  * @param home - Harness data directory, normally the existing .dsh directory.
+ * @param options.rea - overrides for ensureReaReleaseArchive (tests only).
  * @returns the backup directory created for this installation.
  */
-export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) {
+export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh'), options = {}) {
   const profile = join(home, 'profiles', 'desktop')
   if (existsSync(join(profile, 'lock'))) throw new Error('Quit Harness before installing the PureGamma UI bundles.')
   const source = join(dirname(fileURLToPath(import.meta.url)), 'plugins')
@@ -31,6 +32,9 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'] } },
   }
   manifest.dependencies ??= {}
+  // Download and sha256-verify the REA release before any profile change so a
+  // tampered or unreachable asset fails the install closed.
+  if (reaArchiveNeeded(manifest)) ensureReaReleaseArchive(home, options.rea)
   const alreadyInstalled = new Set(Object.keys(manifest.dependencies))
   manifest.dsh ??= {}
   manifest.dsh.profile ??= {}
@@ -59,6 +63,7 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
   const inventoryPath = join(dirname(fileURLToPath(import.meta.url)), 'bundled-plugins', 'inventory.json')
   if (existsSync(inventoryPath)) {
     const inventory = JSON.parse(readFileSync(inventoryPath, 'utf8'))
+    let upgradedBundledPurge = false
     for (const plugin of inventory.plugins) {
       // A user's installed version and source take precedence. Only replace the
       // previous PureGamma-bundled purge archive, whose default prompt could
@@ -69,6 +74,7 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
         && previous.replaceAll('\\', '/').includes('bundled-plugin-archives/')
         && previous.endsWith('dsh-purge-1.1.71-puregamma.3.tgz')
       if (previous !== undefined && !priorBundledPurge) continue
+      if (priorBundledPurge) upgradedBundledPurge = true
       const archive = join(dirname(inventoryPath), plugin.archive)
       if (createHash('sha256').update(readFileSync(archive)).digest('hex') !== plugin.sha256) {
         throw new Error('Bundled plugin archive failed its integrity check: ' + plugin.name)
@@ -79,9 +85,11 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh')) 
       manifest.dependencies[plugin.name] = 'file:../../bundled-plugin-archives/' + plugin.archive
     }
     for (const bundle of inventory.bundles) {
-      // The requested Clean capability must be mounted even when an earlier
-      // broken purge install left its dependency present but its bundle off.
-      if (bundle !== 'dsh-purge' && alreadyInstalled.has(bundle) && !manifest.dsh.profile.bundles.includes(bundle)) continue
+      // Respect bundles a user disabled. The one exception: when this run
+      // upgrades the earlier broken PureGamma-bundled purge archive, mount it
+      // even if that broken install left its bundle off.
+      const forceUpgradedPurge = bundle === 'dsh-purge' && upgradedBundledPurge
+      if (!forceUpgradedPurge && alreadyInstalled.has(bundle) && !manifest.dsh.profile.bundles.includes(bundle)) continue
       if (!manifest.dsh.profile.bundles.includes(bundle)) manifest.dsh.profile.bundles.push(bundle)
     }
   }

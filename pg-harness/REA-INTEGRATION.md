@@ -10,6 +10,7 @@ the REA Git repository's root CLI package. The aim is to expose local
 | --- | --- |
 | Bundle | `dsh-rea-bundle@0.2.0` |
 | Installer source | `https://github.com/xxxxxwater/rea/releases/download/dsh-v0.2.0/dsh-rea-bundle-0.2.0.tgz` |
+| Installed dependency spec | `file:../../bundled-plugin-archives/dsh-rea-bundle-0.2.0.tgz` (downloaded, then verified against the SHA-256 below; mismatch aborts the install) |
 | Published artifact SHA-256 | `011e78aebde2b71577286869b65719af83de888e01313445e744999d78844630` |
 | REA runtime dependency inside the bundle | `rea-agents@6.4.0` |
 | Alternate standalone Git tag | `https://github.com/xxxxxwater/rea#dsh-plugin-v0.2.0` |

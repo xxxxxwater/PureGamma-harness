@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -6,7 +6,16 @@ import { execFileSync } from 'node:child_process'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { install } from './install.mjs'
-import { REA_BUNDLE, REA_RELEASE_SPEC } from './rea-plugin.mjs'
+import { createHash } from 'node:crypto'
+import { REA_BUNDLE, REA_RELEASE_ARCHIVE, REA_RELEASE_SPEC, REA_RELEASE_URL } from './rea-plugin.mjs'
+
+// Offline stand-in for the GitHub release download; the installer still
+// performs its sha256 check against this fixture's digest.
+const REA_FIXTURE = Buffer.from('fixture dsh-rea-bundle archive\n')
+const OFFLINE = Object.freeze({ rea: {
+  download: (_url, file) => writeFileSync(file, REA_FIXTURE),
+  sha256: createHash('sha256').update(REA_FIXTURE).digest('hex'),
+} })
 
 test('installation preserves third-party bundles and user settings and remains repeatable', () => {
   const home = mkdtempSync(join(tmpdir(), 'pg-install-'))
@@ -16,8 +25,8 @@ test('installation preserves third-party bundles and user settings and remains r
     writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { retained: '1.2.3', 'dsh-pixel-font': 'link:original-font', 'dsh-imessage-blue': 'link:original-palette' }, dsh: { profile: { bundles: ['retained', 'dsh-pixel-font', 'dsh-imessage-blue'] } } }))
     writeFileSync(join(profile, 'cordis.patch.yml'), 'retained settings\n')
     writeFileSync(join(home, 'credentials.json'), 'retained credentials\n')
-    install(home)
-    install(home)
+    install(home, OFFLINE)
+    install(home, OFFLINE)
     const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(result.dependencies.retained, '1.2.3')
     assert.equal(result.dsh.profile.bundles[0], 'retained')
@@ -55,7 +64,7 @@ test('installing local UI updates preserves an already-installed disabled bundle
     const profile = join(home, 'profiles', 'desktop')
     mkdirSync(profile, { recursive: true })
     writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { 'billion-context': '0.1.199' }, dsh: { profile: { bundles: ['retained'] } } }))
-    install(home)
+    install(home, OFFLINE)
     const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(result.dependencies['billion-context'], '0.1.199')
     assert.ok(!result.dsh.profile.bundles.includes('billion-context'))
@@ -75,7 +84,7 @@ test('upgrades only the prior PureGamma-bundled dsh-purge archive', () => {
       dsh: { profile: { bundles: ['retained'] } },
     }))
     writeFileSync(join(home, 'prompt-inject.md'), 'user prompt remains\n')
-    install(home)
+    install(home, OFFLINE)
     const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(result.dependencies['dsh-purge'], 'file:../../bundled-plugin-archives/dsh-purge-1.1.71-puregamma.4.tgz')
     assert.equal(result.dependencies.retained, '3.2.1')
@@ -83,7 +92,7 @@ test('upgrades only the prior PureGamma-bundled dsh-purge archive', () => {
     assert.equal(result.dsh.profile.bundles.filter(name => name === 'dsh-purge').length, 1)
     result.dependencies['dsh-purge'] = 'link:../../local-plugins/dsh-purge'
     writeFileSync(join(profile, 'package.json'), JSON.stringify(result))
-    install(home)
+    install(home, OFFLINE)
     const custom = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(custom.dependencies['dsh-purge'], 'link:../../local-plugins/dsh-purge')
   } finally { rmSync(home, { recursive: true, force: true }) }
@@ -126,7 +135,7 @@ test('installation refuses an active desktop profile', () => {
   try {
     mkdirSync(join(home, 'profiles', 'desktop'), { recursive: true })
     writeFileSync(join(home, 'profiles', 'desktop', 'lock'), 'active')
-    assert.throws(() => install(home), /Quit Harness/)
+    assert.throws(() => install(home, OFFLINE), /Quit Harness/)
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
@@ -141,7 +150,7 @@ test('Codex CLI upgrades the legacy model route without mutating existing creden
       dsh: { profile: { bundles: ['keep-me', 'dsh-codex-cli'] } },
     }))
     writeFileSync(join(home, 'credentials.json'), 'original-auth-untouched')
-    install(home)
+    install(home, OFFLINE)
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(manifest.dependencies['dsh-codex-cli'], 'link:../../local-plugins/dsh-codex-cli')
     assert.ok(!manifest.dsh.profile.bundles.includes('dsh-codex-cli'))
@@ -167,7 +176,7 @@ test('already-installed-but-disabled REA is activated without replacing its sour
       custom: { unchanged: true },
     }
     writeFileSync(join(profile, 'package.json'), JSON.stringify(before))
-    install(home)
+    install(home, OFFLINE)
     const after = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(after.dependencies[REA_BUNDLE], originalReaSource)
     assert.equal(after.dsh.profile.bundles[0], 'another')
@@ -175,9 +184,61 @@ test('already-installed-but-disabled REA is activated without replacing its sour
     assert.ok(after.dsh.profile.bundles.includes('dsh-prompt-pro'))
     assert.equal(after.dsh.profile.bundles.filter(x => x === REA_BUNDLE).length, 1)
     assert.deepEqual(after.custom, before.custom)
-    install(home)
+    install(home, OFFLINE)
     const repeated = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(repeated.dependencies[REA_BUNDLE], originalReaSource)
     assert.equal(repeated.dsh.profile.bundles.filter(x => x === REA_BUNDLE).length, 1)
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+test('REA release archive is downloaded, sha256-verified and installed via file: spec', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-rea-archive-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: { [REA_BUNDLE]: REA_RELEASE_URL }, dsh: { profile: { bundles: ['kept'] } },
+    }))
+    const urls = []
+    install(home, { rea: { ...OFFLINE.rea, download: (url, file) => { urls.push(url); writeFileSync(file, REA_FIXTURE) } } })
+    assert.deepEqual(urls, [REA_RELEASE_URL])
+    const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.equal(result.dependencies[REA_BUNDLE], REA_RELEASE_SPEC)
+    assert.ok(REA_RELEASE_SPEC.startsWith('file:'))
+    assert.deepEqual(readFileSync(join(home, 'bundled-plugin-archives', REA_RELEASE_ARCHIVE)), REA_FIXTURE)
+    // A verified cached archive is reused without another download.
+    install(home, { rea: { ...OFFLINE.rea, download: () => { throw new Error('unexpected download') } } })
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+test('tampered REA release archive fails closed without changing the profile', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-rea-tampered-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    const original = JSON.stringify({ dependencies: { kept: '1.0.0' }, dsh: { profile: { bundles: ['kept'] } } })
+    writeFileSync(join(profile, 'package.json'), original)
+    assert.throws(() => install(home, { rea: { ...OFFLINE.rea, download: (_url, file) => writeFileSync(file, 'evil') } }),
+      /integrity check/)
+    assert.equal(readFileSync(join(profile, 'package.json'), 'utf8'), original)
+    assert.equal(readdirSync(join(home, 'bundled-plugin-archives')).length, 0)
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+test('a user-disabled dsh-purge bundle stays disabled on reinstall', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-purge-disabled-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: {}, dsh: { profile: { bundles: ['kept'] } } }))
+    install(home, OFFLINE)
+    const first = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.ok(first.dsh.profile.bundles.includes('dsh-purge'))
+    first.dsh.profile.bundles = first.dsh.profile.bundles.filter(name => name !== 'dsh-purge')
+    writeFileSync(join(profile, 'package.json'), JSON.stringify(first))
+    install(home, OFFLINE)
+    const second = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    assert.ok(!second.dsh.profile.bundles.includes('dsh-purge'))
+    assert.equal(second.dependencies['dsh-purge'], 'file:../../bundled-plugin-archives/dsh-purge-1.1.71-puregamma.4.tgz')
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
