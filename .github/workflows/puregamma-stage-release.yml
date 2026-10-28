@@ -11,14 +11,14 @@ on:
         description: Release version without the v prefix (tag puregamma-harness-v<version>)
         type: string
         required: true
-        default: '0.1.0'
+        default: 0.2.2-alpha.2-pg.1
 
 permissions:
   actions: read
   contents: write
 
 concurrency:
-  group: puregamma-stage-first-release
+  group: puregamma-stage-release
   cancel-in-progress: false
 
 jobs:
@@ -46,11 +46,11 @@ jobs:
           const release = JSON.parse(fs.readFileSync('release.json'));
           const jobs = JSON.parse(fs.readFileSync('build-jobs.json')).jobs;
           if (run.status !== 'completed' || run.path !== '.github/workflows/puregamma-desktop-release.yml') throw Error('Expected a completed native-build workflow');
-          if (!jobs.some(j => j.name === 'Windows x64 EXE' && j.conclusion === 'success')) throw Error('Windows build and runtime checks must pass');
+          for (const name of ['Windows x64 EXE', 'Apple Silicon macOS', 'Intel macOS']) {
+            if (!jobs.some(j => j.name === name && j.conclusion === 'success')) throw Error(name + ' build and runtime checks must pass');
+          }
           if (release.target_commitish !== run.head_sha) throw Error('Release must target the verified build commit');
-          const arm = jobs.some(j => j.name === 'Apple Silicon macOS' && j.conclusion === 'success');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, 'source_sha=' + run.head_sha + '\n');
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'include_arm=' + arm + '\n');
           JS
       - uses: actions/checkout@v7.0.1
         with:
@@ -59,10 +59,14 @@ jobs:
       - name: Retrieve verified native artifacts
         run: |
           gh run download "$BUILD_RUN" --name puregamma-windows-x64 --dir release-assets/windows
-      - name: Retrieve Apple Silicon only after its own build and runtime checks pass
-        if: steps.verify.outputs.include_arm == 'true'
-        run: |
-          gh run download "$BUILD_RUN" --name puregamma-macos-arm64 --dir release-assets/mac
+          gh run download "$BUILD_RUN" --name puregamma-macos-arm64 --dir release-assets/mac-arm64
+          gh run download "$BUILD_RUN" --name puregamma-macos-x64 --dir release-assets/mac-x64
+          for asset in \
+            "release-assets/windows/puregamma-harness-v$RELEASE_VERSION-windows-x64.exe" \
+            "release-assets/mac-arm64/puregamma-harness-v$RELEASE_VERSION-macos-arm64.zip" \
+            "release-assets/mac-x64/puregamma-harness-v$RELEASE_VERSION-macos-x64.zip"; do
+            test -s "$asset" || { echo "Missing build artifact $asset" >&2; exit 1; }
+          done
       - name: Archive the exact release source and all bundled plugin code
         run: |
           git archive --format=zip --prefix="PureGamma-Harness-$RELEASE_VERSION-source/" --output="release-assets/puregamma-harness-v$RELEASE_VERSION-source.zip" HEAD
@@ -73,14 +77,18 @@ jobs:
           for (const p of inventory.plugins) {
             if (crypto.createHash('sha256').update(fs.readFileSync('pg-harness/bundled-plugins/' + p.archive)).digest('hex') !== p.sha256) throw Error('Plugin archive integrity failed');
           }
+          const purge = inventory.bundles.includes('dsh-purge') && inventory.plugins.find(p => p.name === 'dsh-purge');
+          fs.appendFileSync(process.env.GITHUB_ENV, 'PURGE_ARCHIVE=' + (purge ? purge.archive : '') + '\n');
           JS
-      - name: Upload verified Windows installer
+      - name: Collect release assets and checksums
         run: |
-          gh release upload "$RELEASE_TAG" --clobber release-assets/windows/*.exe
-      - name: Upload verified Apple Silicon installer
-        if: steps.verify.outputs.include_arm == 'true'
+          mkdir -p publish
+          cp release-assets/windows/*.exe release-assets/mac-arm64/*.zip release-assets/mac-x64/*.zip \
+            "release-assets/puregamma-harness-v$RELEASE_VERSION-source.zip" publish/
+          if [ -n "$PURGE_ARCHIVE" ]; then cp "pg-harness/bundled-plugins/$PURGE_ARCHIVE" publish/; fi
+          (cd publish && sha256sum -- * > ../SHA256SUMS)
+          mv SHA256SUMS publish/
+          cat publish/SHA256SUMS
+      - name: Upload verified installers, source, bundled dsh-purge, and checksums
         run: |
-          gh release upload "$RELEASE_TAG" --clobber release-assets/mac/*.zip
-      - name: Upload the exact release source archive
-        run: |
-          gh release upload "$RELEASE_TAG" --clobber "release-assets/puregamma-harness-v$RELEASE_VERSION-source.zip"
+          gh release upload "$RELEASE_TAG" --clobber publish/*
