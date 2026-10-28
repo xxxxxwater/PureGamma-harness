@@ -8,6 +8,14 @@ test('Claude account subprocess does not inherit API keys or Harness secrets', (
   { HOME: '/tmp/home', PATH: '/bin', HTTPS_PROXY: 'http://proxy' })
 })
 
+test('Windows Claude subprocess keeps the runtime variables the CLI needs', () => {
+  assert.deepEqual(cliEnvironment({ Path: 'C:\\bin', USERPROFILE: 'C:\\Users\\me', APPDATA: 'C:\\A', LOCALAPPDATA: 'C:\\L',
+    SystemRoot: 'C:\\Windows', PATHEXT: '.EXE;.CMD', ComSpec: 'cmd.exe', TEMP: 'C:\\T', TMP: 'C:\\T', ANTHROPIC_API_KEY: 'private' }, 'win32'),
+  { PATH: 'C:\\bin', USERPROFILE: 'C:\\Users\\me', APPDATA: 'C:\\A', LOCALAPPDATA: 'C:\\L', SystemRoot: 'C:\\Windows',
+    PATHEXT: '.EXE;.CMD', ComSpec: 'cmd.exe', TEMP: 'C:\\T', TMP: 'C:\\T' })
+  assert.equal(cliEnvironment({ USERPROFILE: 'C:\\Users\\me' }, 'linux').USERPROFILE, undefined)
+})
+
 test('reads all CLI model picker rows without inference', async () => {
   let prompt, closed = false
   const rows = [{ value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus' },

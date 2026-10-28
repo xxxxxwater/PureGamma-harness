@@ -7,17 +7,28 @@ const MAX_OUTPUT = 8 * 1024 * 1024
 const TIMEOUT_MS = 5 * 60 * 1000
 
 /** Do not let an ambient API key silently replace the Claude CLI account. */
-export function cliEnvironment(environment = process.env) {
-  const allowed = new Set(['HOME', 'USER', 'LOGNAME', 'SHELL', 'PATH', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM',
+export function cliEnvironment(environment = process.env, platform = process.platform) {
+  const names = ['HOME', 'USER', 'LOGNAME', 'SHELL', 'PATH', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM',
     'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy',
-    'CLAUDE_CONFIG_DIR'])
-  return Object.fromEntries(Object.entries(environment).filter(([key, value]) => allowed.has(key) && typeof value === 'string'))
+    'CLAUDE_CONFIG_DIR']
+  if (platform === 'win32') {
+    names.push('USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SystemRoot', 'SystemDrive', 'PATHEXT', 'ComSpec', 'TEMP', 'TMP',
+      'windir', 'ProgramFiles', 'ProgramData', 'HOMEDRIVE', 'HOMEPATH')
+  }
+  // Windows variable names are case-insensitive (PATH is often spelled Path).
+  const canonical = new Map(names.map(name => [platform === 'win32' ? name.toUpperCase() : name, name]))
+  const env = {}
+  for (const [key, value] of Object.entries(environment)) {
+    const name = canonical.get(platform === 'win32' ? key.toUpperCase() : key)
+    if (name && typeof value === 'string') env[name] ??= value
+  }
+  return env
 }
 
 const sdkOptions = (abortController, environment) => ({
   abortController,
   env: cliEnvironment(environment),
-  cwd: environment.HOME ?? process.cwd(),
+  cwd: environment.HOME ?? environment.USERPROFILE ?? process.cwd(),
   settingSources: [],
   tools: [],
   permissionMode: 'dontAsk',

@@ -1,25 +1,52 @@
 import {spawn} from 'node:child_process'
 import {access} from 'node:fs/promises'
 import {constants} from 'node:fs'
-import {join, isAbsolute} from 'node:path'
+import {posix, win32} from 'node:path'
 import {homedir} from 'node:os'
 
+const WINDOWS_ENV = ['USERPROFILE','APPDATA','LOCALAPPDATA','SystemRoot','SystemDrive','PATHEXT','ComSpec','TEMP','TMP','windir','ProgramFiles','ProgramData','HOMEDRIVE','HOMEPATH']
+const SPAWNABLE_EXTENSIONS = ['.com','.exe','.bat','.cmd']
+
 /** Give the official CLI only its runtime and transport environment. */
-export function cliEnvironment(environment = process.env, home = environment.CODEX_HOME) {
-  const allowed = new Set(['HOME','USER','LOGNAME','SHELL','PATH','TMPDIR','LANG','LC_ALL','LC_CTYPE','HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy','https_proxy','all_proxy','no_proxy'])
-  const env = Object.fromEntries(Object.entries(environment).filter(([key,value]) => allowed.has(key) && typeof value === 'string'))
+export function cliEnvironment(environment = process.env, home = environment.CODEX_HOME, platform = process.platform) {
+  const names = ['HOME','USER','LOGNAME','SHELL','PATH','TMPDIR','LANG','LC_ALL','LC_CTYPE','HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy','https_proxy','all_proxy','no_proxy']
+  if (platform === 'win32') names.push(...WINDOWS_ENV)
+  // Windows variable names are case-insensitive (PATH is often spelled Path).
+  const canonical = new Map(names.map(name => [platform === 'win32' ? name.toUpperCase() : name, name]))
+  const env = {}
+  for (const [key,value] of Object.entries(environment)) {
+    const name = canonical.get(platform === 'win32' ? key.toUpperCase() : key)
+    if (name && typeof value === 'string') env[name] ??= value
+  }
   env.HOME ??= homedir()
-  env.PATH ??= '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+  if (platform !== 'win32') env.PATH ??= '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin'
   if (home) env.CODEX_HOME = home
   return env
 }
 
+/** Candidate codex executables on PATH, honoring the platform delimiter and Windows PATHEXT. */
+export function cliCandidates(env, platform = process.platform) {
+  const path = platform === 'win32' ? win32 : posix
+  const names = platform === 'win32'
+    ? (env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').map(ext => ext.trim().toLowerCase())
+      .filter(ext => SPAWNABLE_EXTENSIONS.includes(ext)).map(ext => 'codex' + ext)
+    : ['codex']
+  return (env.PATH ?? '').split(path.delimiter).filter(Boolean).flatMap(dir => names.map(name => path.join(dir, name)))
+}
+
+/** Windows .cmd/.bat shims can only be started through the shell. */
+export function needsShell(file, platform = process.platform) {
+  return platform === 'win32' && /\.(cmd|bat)$/i.test(file)
+}
+
 /** Discover an installed official Codex CLI without a shell or package installation. */
-export async function findCli(explicit, env = cliEnvironment()) {
-  const candidates = explicit ? [explicit] : [...(env.PATH ?? '').split(':').map(p=>join(p,'codex')), '/usr/local/bin/codex','/opt/homebrew/bin/codex']
-  for (const path of new Set(candidates)) {
-    if (!isAbsolute(path)) continue
-    try { await access(path, constants.X_OK); return path } catch {}
+export async function findCli(explicit, env = cliEnvironment(), platform = process.platform) {
+  const path = platform === 'win32' ? win32 : posix
+  const fallbacks = platform === 'win32' ? [] : ['/usr/local/bin/codex','/opt/homebrew/bin/codex']
+  const candidates = explicit ? [explicit] : [...cliCandidates(env, platform), ...fallbacks]
+  for (const file of new Set(candidates)) {
+    if (!path.isAbsolute(file)) continue
+    try { await access(file, platform === 'win32' ? constants.F_OK : constants.X_OK); return file } catch {}
   }
   throw new Error('未找到 Codex CLI。请先安装 Codex CLI，或在插件配置中设置 cliPath。')
 }
@@ -34,7 +61,9 @@ export class CodexAppServer {
     return this.starting
   }
   async boot() {
-    const child=spawn(this.path,['app-server','--listen','stdio://'],{cwd:this.env.HOME,env:this.env,stdio:['pipe','pipe','pipe'],windowsHide:true})
+    // Fixed arguments only; the quoted path is the sole shell input for .cmd shims.
+    const shell=needsShell(this.path)
+    const child=spawn(shell?'"'+this.path+'"':this.path,['app-server','--listen','stdio://'],{cwd:this.env.HOME,env:this.env,stdio:['pipe','pipe','pipe'],windowsHide:true,shell})
     this.child=child
     let buffer=''
     child.stdout.setEncoding('utf8')

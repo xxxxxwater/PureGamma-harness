@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
-import { instruction } from './index.js'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { cliEnvironment, findCodex, instruction, runCodex } from './index.js'
 
 function mountedClient() {
   const hooks = []
@@ -69,4 +72,37 @@ test('a changed draft is not overwritten by a late result', async () => {
     await running
     assert.equal(draft, '用户正在编辑的新稿')
   } finally { globalThis.fetch = originalFetch }
+})
+
+test('Codex subprocess gets an allowlisted environment, including Windows runtime variables', () => {
+  assert.deepEqual(cliEnvironment({ HOME: '/h', PATH: '/bin', OPENAI_API_KEY: 'private', DSH_WEB_TOKEN: 'private', HTTPS_PROXY: 'http://p' }, 'linux'),
+    { HOME: '/h', PATH: '/bin', HTTPS_PROXY: 'http://p', NO_COLOR: '1' })
+  const win = cliEnvironment({ Path: 'C:\\bin', USERPROFILE: 'C:\\Users\\me', LOCALAPPDATA: 'C:\\L', SystemRoot: 'C:\\Windows', TMP: 'C:\\T', OPENAI_API_KEY: 'private' }, 'win32')
+  assert.deepEqual(win, { PATH: 'C:\\bin', USERPROFILE: 'C:\\Users\\me', LOCALAPPDATA: 'C:\\L', SystemRoot: 'C:\\Windows', TMP: 'C:\\T', NO_COLOR: '1' })
+})
+
+test('findCodex uses the platform PATH delimiter and Windows PATHEXT', () => {
+  const seen = []
+  const exists = file => { seen.push(file); return file === 'C:\\npm\\codex.cmd' }
+  assert.equal(findCodex({ PATH: 'C:\\Tools;C:\\npm', PATHEXT: '.EXE;.CMD;.JS' }, 'win32', exists), 'C:\\npm\\codex.cmd')
+  assert.deepEqual(seen.filter(Boolean), ['C:\\Tools\\codex.exe', 'C:\\Tools\\codex.cmd', 'C:\\npm\\codex.exe', 'C:\\npm\\codex.cmd'])
+  assert.equal(findCodex({ PATH: '/a:/b' }, 'linux', file => file === '/b/codex'), '/b/codex')
+})
+
+test('runCodex does not pass ambient secrets and honors the configured model', { skip: process.platform === 'win32' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pg-prompt-pro-cli-'))
+  const saved = process.env.OPENAI_API_KEY
+  try {
+    const cli = join(dir, 'codex')
+    writeFileSync(cli, '#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({ key: process.env.OPENAI_API_KEY ?? null, model: process.argv[process.argv.indexOf(\'-m\') + 1] }))\n')
+    chmodSync(cli, 0o700)
+    process.env.OPENAI_API_KEY = 'private'
+    const result = JSON.parse(await runCodex('draft', { cliPath: cli, model: 'custom-model' }))
+    assert.deepEqual(result, { key: null, model: 'custom-model' })
+    await assert.rejects(runCodex('draft', { cliPath: cli, model: 'bad model; rm' }), /Invalid model/)
+  } finally {
+    if (saved === undefined) delete process.env.OPENAI_API_KEY
+    else process.env.OPENAI_API_KEY = saved
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import {mkdtemp,writeFile,rm,chmod} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
-import {CodexAppServer,cliEnvironment} from './app-server.mjs'
+import {CodexAppServer,cliCandidates,cliEnvironment,findCli,needsShell} from './app-server.mjs'
 import {materializeModels} from './catalog.mjs'
-import {CliTokenSource,readCliLogin} from './auth.mjs'
+import {CliTokenSource,readCliLogin,tokenExpiry} from './auth.mjs'
 const jwt=expires=>'header.'+Buffer.from(JSON.stringify({exp:Math.floor(expires/1000)})).toString('base64url')+'.signature'
 const persist=(home,token)=>writeFile(join(home,'auth.json'),JSON.stringify({auth_mode:'chatgpt',tokens:{access_token:token,refresh_token:'private-refresh'}}),{mode:0o600})
 
@@ -78,4 +78,35 @@ readline.createInterface({input:process.stdin}).on('line',line=>{const x=JSON.pa
   await accepted;unsubscribe();await server.dispose()
   assert.match(await pending,/已关闭/);assert.equal(server.pending.size,0)
  }finally{await server.dispose();await rm(home,{recursive:true,force:true})}
+})
+
+test('Windows CLI discovery uses ; and PATHEXT, and keeps Windows runtime variables',async()=>{
+ const env=cliEnvironment({Path:'C:\\Tools;C:\\npm',PATHEXT:'.COM;.EXE;.BAT;.CMD;.VBS;.JS',USERPROFILE:'C:\\Users\\me',APPDATA:'C:\\AppData',SystemRoot:'C:\\Windows',ComSpec:'cmd.exe',TEMP:'C:\\Temp',OPENAI_API_KEY:'private'},undefined,'win32')
+ assert.equal(env.PATH,'C:\\Tools;C:\\npm')
+ assert.equal(env.USERPROFILE,'C:\\Users\\me');assert.equal(env.SystemRoot,'C:\\Windows');assert.equal(env.ComSpec,'cmd.exe');assert.equal(env.TEMP,'C:\\Temp')
+ assert.equal(env.OPENAI_API_KEY,undefined)
+ assert.deepEqual(cliCandidates(env,'win32'),['C:\\Tools\\codex.com','C:\\Tools\\codex.exe','C:\\Tools\\codex.bat','C:\\Tools\\codex.cmd','C:\\npm\\codex.com','C:\\npm\\codex.exe','C:\\npm\\codex.bat','C:\\npm\\codex.cmd'])
+ assert.deepEqual(cliCandidates({PATH:'C:\\a'},'win32').map(x=>x.slice(5)),['codex.com','codex.exe','codex.bat','codex.cmd'])
+ assert.deepEqual(cliCandidates({PATH:'/a:/b'},'linux'),['/a/codex','/b/codex'])
+ assert.equal(needsShell('C:\\npm\\codex.cmd','win32'),true)
+ assert.equal(needsShell('C:\\npm\\codex.exe','win32'),false)
+ assert.equal(needsShell('/bin/codex.cmd','linux'),false)
+})
+test('POSIX CLI discovery finds codex on PATH',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'pg-codex-path-'))
+ try{
+  await writeFile(join(dir,'codex'),'#!/bin/sh\n');await chmod(join(dir,'codex'),0o700)
+  assert.equal(await findCli(undefined,{PATH:'/nonexistent:'+dir},'linux'),join(dir,'codex'))
+ }finally{await rm(dir,{recursive:true,force:true})}
+})
+test('tokens without exp are treated as unknown expiry, not permanently expired',async()=>{
+ const noExp='header.'+Buffer.from(JSON.stringify({sub:'x'})).toString('base64url')+'.signature'
+ assert.equal(tokenExpiry(noExp),null)
+ assert.equal(tokenExpiry('opaque-token'),null)
+ const home=await mkdtemp(join(tmpdir(),'pg-codex-noexp-'))
+ try{
+  await persist(home,noExp)
+  const source=new CliTokenSource(home,{request(){throw Error('unexpected renewal')}})
+  assert.equal(await source.access(),noExp)
+ }finally{await rm(home,{recursive:true,force:true})}
 })

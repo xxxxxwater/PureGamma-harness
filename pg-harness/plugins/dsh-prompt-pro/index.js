@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix, win32 } from 'node:path'
 
 export const name = 'prompt-pro'
 export const inject = ['webServer', 'connection']
@@ -9,23 +9,55 @@ export const inject = ['webServer', 'connection']
 const MAX_DRAFT = 12000
 const MAX_RESULT = 32000
 const TIMEOUT_MS = 120000
+export const DEFAULT_MODEL = 'gpt-6.1-sol'
+const WINDOWS_ENV = ['USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SystemRoot', 'SystemDrive', 'PATHEXT', 'ComSpec', 'TEMP', 'TMP', 'windir', 'ProgramFiles', 'ProgramData', 'HOMEDRIVE', 'HOMEPATH']
+const SPAWNABLE_EXTENSIONS = ['.com', '.exe', '.bat', '.cmd']
 
 export function instruction(draft) {
   return `你是专业的提示词编辑。只把 <原始请求> 改写成一条可直接提交给 AI 助手的请求，不执行请求本身。\n\n要求：\n1. 保留原始目标、语言、专有名词、路径、数值、禁止事项和授权边界。\n2. 让任务更明确、信息更完整、表达更专业；按需补充目标、背景、实施步骤、交付物和验收标准。简单任务保持简洁，复杂任务用清晰段落或列表。\n3. 不编造用户没有提供的事实、权限、数据、时间或完成状态。缺少的关键信息用简短占位或请执行者先核实。\n4. 如涉及代码或实际操作，强调检查现状、最小必要改动、验证结果和报告限制；不要扩展任务范围。\n5. 不加入自我评价、前言、解释或 Markdown 代码围栏。只输出改写后的提示词。\n\n<原始请求>\n${draft}\n</原始请求>`
 }
 
-export function findCodex(environment = process.env) {
-  const candidates = [environment.PG_PROMPT_PRO_CODEX_PATH, '/usr/local/bin/codex', '/opt/homebrew/bin/codex', join(homedir(), '.local/bin/codex')]
-  for (const path of (environment.PATH || '').split(':')) candidates.push(join(path, 'codex'))
-  return candidates.find(path => path && existsSync(path))
+/** Give the Codex CLI only its runtime and transport environment, never Harness or API secrets. */
+export function cliEnvironment(environment = process.env, platform = process.platform) {
+  const names = ['HOME', 'USER', 'LOGNAME', 'SHELL', 'PATH', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'CODEX_HOME',
+    'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy']
+  if (platform === 'win32') names.push(...WINDOWS_ENV)
+  // Windows variable names are case-insensitive (PATH is often spelled Path).
+  const canonical = new Map(names.map(name => [platform === 'win32' ? name.toUpperCase() : name, name]))
+  const env = {}
+  for (const [key, value] of Object.entries(environment)) {
+    const name = canonical.get(platform === 'win32' ? key.toUpperCase() : key)
+    if (name && typeof value === 'string') env[name] ??= value
+  }
+  env.NO_COLOR = '1'
+  return env
 }
 
-export function runCodex(draft, { cliPath = findCodex(), signal, timeoutMs = TIMEOUT_MS } = {}) {
+export function findCodex(environment = process.env, platform = process.platform, exists = existsSync) {
+  const path = platform === 'win32' ? win32 : posix
+  const names = platform === 'win32'
+    ? (environment.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').map(ext => ext.trim().toLowerCase())
+      .filter(ext => SPAWNABLE_EXTENSIONS.includes(ext)).map(ext => 'codex' + ext)
+    : ['codex']
+  const candidates = [environment.PG_PROMPT_PRO_CODEX_PATH]
+  if (platform !== 'win32') candidates.push('/usr/local/bin/codex', '/opt/homebrew/bin/codex', join(homedir(), '.local/bin/codex'))
+  const searchPath = environment.PATH ?? environment.Path ?? ''
+  for (const dir of searchPath.split(path.delimiter)) {
+    if (dir) for (const name of names) candidates.push(path.join(dir, name))
+  }
+  return candidates.find(file => file && exists(file))
+}
+
+export function runCodex(draft, { cliPath = findCodex(), model = DEFAULT_MODEL, signal, timeoutMs = TIMEOUT_MS } = {}) {
   if (!cliPath) return Promise.reject(new Error('找不到本机 Codex CLI'))
+  if (!/^[\w.:/-]+$/.test(model)) return Promise.reject(new Error('Invalid model name'))
+  // Windows .cmd/.bat shims need the shell; every argument below is then shell-safe.
+  const shell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cliPath)
   const directory = mkdtempSync(join(tmpdir(), 'pg-prompt-pro-'))
   return new Promise((resolve, reject) => {
-    const child = spawn(cliPath, ['exec', '--ephemeral', '--ignore-user-config', '--skip-git-repo-check', '--sandbox', 'read-only', '-C', directory, '-m', 'gpt-6.1-sol', '-c', 'model_reasoning_effort="medium"', '--color', 'never', '-'], {
-      cwd: directory, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, NO_COLOR: '1' },
+    const quote = value => shell ? '"' + value + '"' : value
+    const child = spawn(quote(cliPath), ['exec', '--ephemeral', '--ignore-user-config', '--skip-git-repo-check', '--sandbox', 'read-only', '-C', quote(directory), '-m', model, '-c', shell ? 'model_reasoning_effort=medium' : 'model_reasoning_effort="medium"', '--color', 'never', '-'], {
+      cwd: directory, stdio: ['pipe', 'pipe', 'pipe'], env: cliEnvironment(), windowsHide: true, shell,
     })
     let output = '', diagnostic = '', settled = false
     const finish = (error, result) => {
@@ -58,7 +90,10 @@ export function runCodex(draft, { cliPath = findCodex(), signal, timeoutMs = TIM
   })
 }
 
-export function apply(ctx) {
+/** Optional config: model (default DEFAULT_MODEL) and cliPath (default: discovered on PATH). */
+export function apply(ctx, config = {}) {
+  const model = typeof config.model === 'string' && config.model.trim() ? config.model.trim() : DEFAULT_MODEL
+  const cliPath = typeof config.cliPath === 'string' && config.cliPath ? config.cliPath : undefined
   const active = new Set()
   const send = (res, status, value) => {
     if (res.writableEnded || res.destroyed) return
@@ -82,7 +117,7 @@ export function apply(ctx) {
       const controller = new AbortController()
       active.add(controller)
       res.once('close', () => controller.abort())
-      try { send(res, 200, { text: await runCodex(draft.trim(), { signal: controller.signal }) }) }
+      try { send(res, 200, { text: await runCodex(draft.trim(), { cliPath: cliPath ?? findCodex(), model, signal: controller.signal }) }) }
       finally { active.delete(controller) }
     } catch (error) {
       send(res, 500, { error: error.message || '提示词增强失败' })
