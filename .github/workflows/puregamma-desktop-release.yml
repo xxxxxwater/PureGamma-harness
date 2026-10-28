@@ -21,7 +21,7 @@ env:
   RELEASE_VERSION: ${{ inputs.version || '0.2.2-alpha.2-pg.1' }}
 
 concurrency:
-  group: puregamma-desktop-release-${{ github.ref }}
+  group: puregamma-desktop-release-${{ github.ref }}-${{ inputs.arm64_runner || 'macos-15' }}
   cancel-in-progress: false
 
 jobs:
