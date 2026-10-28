@@ -2,12 +2,18 @@ name: PureGamma desktop release builds
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the v prefix (tag puregamma-harness-v<version>)
+        type: string
+        required: true
+        default: 0.2.2-alpha.2-pg.1
 
 permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: 0.2.1-rc.2-purge.2
+  RELEASE_VERSION: ${{ inputs.version || '0.2.2-alpha.2-pg.1' }}
 
 concurrency:
   group: puregamma-desktop-release-${{ github.ref }}
@@ -134,6 +140,72 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: puregamma-macos-diagnostics
+          path: apps/desktop/.desktop-build/packaging-runs/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+  mac-x64:
+    name: Intel macOS
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/puregamma-pnpm
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Confirm native architecture
+        run: test "$(uname -m)" = x86_64
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify plugin installation preserves user data
+        run: node --test pg-harness/install.test.mjs
+      - name: Build app and verify packaged runtime
+        run: pnpm run package:desktop:mac:x64:unsigned --dir
+      - name: Stage app, plugin installer, and guides
+        run: |
+          stage_dir="stage/PureGamma-Harness-${RELEASE_VERSION}"
+          archive="release-assets/puregamma-harness-v${RELEASE_VERSION}-macos-x64.zip"
+          mkdir -p release-assets "$stage_dir/bundled-plugins"
+          cp -R 'apps/desktop/.desktop-build/targets/mac-x64/unsigned-artifacts/mac/PureGamma Harness.app' "$stage_dir/"
+          cp 'pg-harness/Install PureGamma Harness.command' pg-harness/README.md pg-harness/README.zh.md "$stage_dir/"
+          chmod +x "$stage_dir/Install PureGamma Harness.command"
+          cp pg-harness/bundled-plugins/inventory.json "$stage_dir/bundled-plugins/"
+          node scripts/verify-puregamma-bundled-plugins.mjs "$stage_dir/PureGamma Harness.app/Contents/Resources/pg-harness"
+          codesign --verify --deep --strict "$stage_dir/PureGamma Harness.app"
+          ditto -c -k --norsrc --keepParent "$stage_dir" "$archive"
+      - name: Verify distributable ZIP after extraction
+        run: |
+          archive="release-assets/puregamma-harness-v${RELEASE_VERSION}-macos-x64.zip"
+          unzip -tq "$archive"
+          if unzip -Z1 "$archive" | grep -q '^__MACOSX/'; then
+            echo 'ZIP contains unnecessary AppleDouble metadata' >&2
+            exit 1
+          fi
+          mkdir -p extracted
+          ditto -x -k --norsrc "$archive" extracted
+          app="extracted/PureGamma-Harness-${RELEASE_VERSION}/PureGamma Harness.app"
+          codesign --verify --deep --strict "$app"
+          node scripts/verify-puregamma-bundled-plugins.mjs "$app/Contents/Resources/pg-harness"
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: puregamma-macos-x64
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Retain packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: puregamma-macos-x64-diagnostics
           path: apps/desktop/.desktop-build/packaging-runs/
           include-hidden-files: true
           if-no-files-found: warn
