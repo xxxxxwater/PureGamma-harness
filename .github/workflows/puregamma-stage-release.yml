@@ -46,7 +46,14 @@ jobs:
           gh api "repos/$GH_REPO/actions/runs/$BUILD_RUN/jobs?per_page=100" > build-jobs.json
           # Immutable releases reject uploads once published, so stage into a draft.
           gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
-            --jq "[.[] | select(.tag_name == \"puregamma-harness-v$RELEASE_VERSION\")]" | jq -s add > releases.json
+            --jq "[.[] | select(.tag_name == \"puregamma-harness-v$RELEASE_VERSION\")]" | jq -s 'add // []' > releases.json
+          # GitHub ignores target_commitish when the tag already exists, so an
+          # existing tag must itself resolve to the verified build commit.
+          gh api "repos/$GH_REPO/git/matching-refs/tags/puregamma-harness-v$RELEASE_VERSION" \
+            --jq "[.[] | select(.ref == \"refs/tags/puregamma-harness-v$RELEASE_VERSION\") | .object]" > tag.json
+          if [ "$(jq -r '.[0].type // empty' tag.json)" = tag ]; then
+            gh api "repos/$GH_REPO/git/tags/$(jq -r '.[0].sha' tag.json)" --jq '[.object]' > tag.json
+          fi
           node - <<'JS'
           const fs = require('node:fs');
           const run = JSON.parse(fs.readFileSync('build-run.json'));
@@ -60,6 +67,8 @@ jobs:
             if (!jobs.some(j => j.name === name && j.conclusion === 'success')) throw Error(name + ' build and runtime checks must pass');
           }
           if (release.target_commitish !== run.head_sha) throw Error('Release must target the verified build commit');
+          const tag = JSON.parse(fs.readFileSync('tag.json'));
+          if (tag.length && (tag[0].type !== 'commit' || tag[0].sha !== run.head_sha)) throw Error('Existing release tag must point at the verified build commit');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, 'source_sha=' + run.head_sha + '\n');
           JS
       - uses: actions/checkout@v7.0.1
@@ -96,6 +105,7 @@ jobs:
           cp release-assets/windows/*.exe release-assets/mac-arm64/*.zip release-assets/mac-x64/*.zip \
             "release-assets/puregamma-harness-v$RELEASE_VERSION-source.zip" publish/
           if [ -n "$PURGE_ARCHIVE" ]; then cp "pg-harness/bundled-plugins/$PURGE_ARCHIVE" publish/; fi
+          test -s "publish/puregamma-harness-v$RELEASE_VERSION-source.zip"
           (cd publish && sha256sum -- * > ../SHA256SUMS)
           mv SHA256SUMS publish/
           cat publish/SHA256SUMS

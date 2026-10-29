@@ -6,6 +6,7 @@ import {join} from 'node:path'
 import {CodexAppServer,cliCandidates,cliEnvironment,findCli,needsShell} from './app-server.mjs'
 import {materializeModels} from './catalog.mjs'
 import {CliTokenSource,readCliLogin,tokenExpiry} from './auth.mjs'
+import {apply} from './index.js'
 const jwt=expires=>'header.'+Buffer.from(JSON.stringify({exp:Math.floor(expires/1000)})).toString('base64url')+'.signature'
 const persist=(home,token)=>writeFile(join(home,'auth.json'),JSON.stringify({auth_mode:'chatgpt',tokens:{access_token:token,refresh_token:'private-refresh'}}),{mode:0o600})
 
@@ -80,6 +81,46 @@ readline.createInterface({input:process.stdin}).on('line',line=>{const x=JSON.pa
  }finally{await server.dispose();await rm(home,{recursive:true,force:true})}
 })
 
+const fixture=async(home,body)=>{const path=join(home,'codex');await writeFile(path,'#!/usr/bin/env node\n'+body);await chmod(path,0o700);return path}
+const exited=child=>child.exitCode!==null||child.signalCode!==null?Promise.resolve():new Promise(resolve=>child.once('exit',resolve))
+test('a CLI that closes stdin rejects the request instead of crashing the Host with EPIPE',async()=>{
+ const home=await mkdtemp(join(tmpdir(),'pg-codex-epipe-'))
+ const path=await fixture(home,String.raw`
+const readline=require('node:readline');const rl=readline.createInterface({input:process.stdin})
+rl.on('line',line=>{const x=JSON.parse(line);if(x.method==='initialize'){process.stdout.write(JSON.stringify({id:x.id,result:{}})+'\n',()=>{rl.close();process.stdin.destroy();require('node:fs').closeSync(0)})}})
+setInterval(()=>{},1000)
+`)
+ const server=new CodexAppServer(path,cliEnvironment({...process.env,HOME:home},home))
+ let uncaught;const onUncaught=error=>{uncaught=error};process.on('uncaughtException',onUncaught)
+ try{
+  await server.start();const child=server.child
+  await new Promise(resolve=>setTimeout(resolve,100))
+  await assert.rejects(server.requestRaw('large',{blob:'x'.repeat(4*1024*1024)},undefined,5000),/不可用|已退出|超时/)
+  await exited(child)
+  assert.equal(uncaught,undefined);assert.equal(server.child,undefined)
+ }finally{process.off('uncaughtException',onUncaught);await server.dispose();await rm(home,{recursive:true,force:true})}
+})
+test('a timed-out handshake kills its CLI, and that late exit cannot detach the next child',async()=>{
+ const home=await mkdtemp(join(tmpdir(),'pg-codex-boot-'))
+ const marker=join(home,'started')
+ const path=await fixture(home,String.raw`
+const fs=require('node:fs');const first=!fs.existsSync(${JSON.stringify(marker)});fs.writeFileSync(${JSON.stringify(marker)},'1')
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const x=JSON.parse(line);if(first||x.method==='initialized')return;process.stdout.write(JSON.stringify({id:x.id,result:{method:x.method}})+'\n')})
+process.on('SIGTERM',()=>{});setInterval(()=>{},1000)
+`)
+ const server=new CodexAppServer(path,cliEnvironment({...process.env,HOME:home},home))
+ server.initTimeout=200
+ try{
+  const starting=server.start();const stalled=server.child
+  await assert.rejects(starting,/超时/)
+  await exited(stalled)
+  assert.notEqual(stalled.signalCode??stalled.exitCode,null)
+  server.initTimeout=5000
+  assert.deepEqual(await server.request('status'),{method:'status'})
+  assert.notEqual(server.child,stalled);assert.equal(server.child.exitCode,null)
+ }finally{await server.dispose();await rm(home,{recursive:true,force:true})}
+})
+
 test('Windows CLI discovery uses ; and PATHEXT, and keeps Windows runtime variables',async()=>{
  const env=cliEnvironment({Path:'C:\\Tools;C:\\npm',PATHEXT:'.COM;.EXE;.BAT;.CMD;.VBS;.JS',USERPROFILE:'C:\\Users\\me',APPDATA:'C:\\AppData',SystemRoot:'C:\\Windows',ComSpec:'cmd.exe',TEMP:'C:\\Temp',OPENAI_API_KEY:'private'},undefined,'win32')
  assert.equal(env.PATH,'C:\\Tools;C:\\npm')
@@ -109,4 +150,43 @@ test('tokens without exp are treated as unknown expiry, not permanently expired'
   const source=new CliTokenSource(home,{request(){throw Error('unexpected renewal')}})
   assert.equal(await source.access(),noExp)
  }finally{await rm(home,{recursive:true,force:true})}
+})
+test('cancelling a login the CLI no longer knows still clears the pending login',async()=>{
+ const home=await mkdtemp(join(tmpdir(),'pg-codex-login-'))
+ const path=join(home,'codex')
+ await writeFile(path,'#!/usr/bin/env node\n'+String.raw`
+let logins=0
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const x=JSON.parse(line);if(x.id===undefined)return
+ const reply=body=>process.stdout.write(JSON.stringify({id:x.id,...body})+'\n')
+ if(x.method==='account/login/start')return reply({result:{loginId:'login-'+(++logins),authUrl:'https://auth.openai.com/oauth?n='+logins}})
+ if(x.method==='account/login/cancel')return reply({error:{code:-32600,message:'unknown loginId'}})
+ if(x.method==='account/read')return reply({result:{account:null}})
+ if(x.method==='model/list')return reply({result:{data:[]}})
+ reply({result:{}})})
+`)
+ await chmod(path,0o700)
+ let handler;const cleanups=[]
+ const ctx={
+  effect(fn){const cleanup=fn();if(typeof cleanup==='function')cleanups.push(cleanup)},
+  root:{loader:{import:async name=>({
+   '@deepseek-ai/dsh-llm-pi-ai':{PiAiAdapter:class{}},
+   '@deepseek-ai/dsh-llm':{LlmAdapter:class{},resolveRetryPolicy:()=>({})},
+   '@earendil-works/pi-ai/providers/openai-codex':{openaiCodexProvider:()=>({getModels:()=>[]})},
+  })[name]}},
+  llm:{registerAdapter:()=>()=>{}},
+  webServer:{register(route){handler=route.handler;return()=>{}}},
+  connection:{requestRejection:()=>undefined},
+ }
+ const call=(method,url)=>new Promise(resolve=>{
+  const res={writeHead(status){this.status=status},end(text){resolve({status:this.status,body:JSON.parse(text)})}}
+  handler({method,url},res)
+ })
+ try{
+  await apply(ctx,{cliPath:path,cliHome:home})
+  const first=await call('POST','/codex-cli/api/login')
+  assert.equal(first.body.loginId,'login-1')
+  assert.deepEqual(await call('POST','/codex-cli/api/cancel-login'),{status:200,body:{ok:true}})
+  assert.equal((await call('GET','/codex-cli/api/status')).body.loginPending,false)
+  assert.equal((await call('POST','/codex-cli/api/login')).body.loginId,'login-2')
+ }finally{for(const cleanup of cleanups.reverse())await cleanup();await rm(home,{recursive:true,force:true})}
 })
