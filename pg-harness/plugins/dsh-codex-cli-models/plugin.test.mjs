@@ -6,6 +6,7 @@ import {join} from 'node:path'
 import {CodexAppServer,cliCandidates,cliEnvironment,findCli,needsShell} from './app-server.mjs'
 import {materializeModels} from './catalog.mjs'
 import {CliTokenSource,readCliLogin,tokenExpiry} from './auth.mjs'
+import {apply} from './index.js'
 const jwt=expires=>'header.'+Buffer.from(JSON.stringify({exp:Math.floor(expires/1000)})).toString('base64url')+'.signature'
 const persist=(home,token)=>writeFile(join(home,'auth.json'),JSON.stringify({auth_mode:'chatgpt',tokens:{access_token:token,refresh_token:'private-refresh'}}),{mode:0o600})
 
@@ -149,4 +150,43 @@ test('tokens without exp are treated as unknown expiry, not permanently expired'
   const source=new CliTokenSource(home,{request(){throw Error('unexpected renewal')}})
   assert.equal(await source.access(),noExp)
  }finally{await rm(home,{recursive:true,force:true})}
+})
+test('cancelling a login the CLI no longer knows still clears the pending login',async()=>{
+ const home=await mkdtemp(join(tmpdir(),'pg-codex-login-'))
+ const path=join(home,'codex')
+ await writeFile(path,'#!/usr/bin/env node\n'+String.raw`
+let logins=0
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const x=JSON.parse(line);if(x.id===undefined)return
+ const reply=body=>process.stdout.write(JSON.stringify({id:x.id,...body})+'\n')
+ if(x.method==='account/login/start')return reply({result:{loginId:'login-'+(++logins),authUrl:'https://auth.openai.com/oauth?n='+logins}})
+ if(x.method==='account/login/cancel')return reply({error:{code:-32600,message:'unknown loginId'}})
+ if(x.method==='account/read')return reply({result:{account:null}})
+ if(x.method==='model/list')return reply({result:{data:[]}})
+ reply({result:{}})})
+`)
+ await chmod(path,0o700)
+ let handler;const cleanups=[]
+ const ctx={
+  effect(fn){const cleanup=fn();if(typeof cleanup==='function')cleanups.push(cleanup)},
+  root:{loader:{import:async name=>({
+   '@deepseek-ai/dsh-llm-pi-ai':{PiAiAdapter:class{}},
+   '@deepseek-ai/dsh-llm':{LlmAdapter:class{},resolveRetryPolicy:()=>({})},
+   '@earendil-works/pi-ai/providers/openai-codex':{openaiCodexProvider:()=>({getModels:()=>[]})},
+  })[name]}},
+  llm:{registerAdapter:()=>()=>{}},
+  webServer:{register(route){handler=route.handler;return()=>{}}},
+  connection:{requestRejection:()=>undefined},
+ }
+ const call=(method,url)=>new Promise(resolve=>{
+  const res={writeHead(status){this.status=status},end(text){resolve({status:this.status,body:JSON.parse(text)})}}
+  handler({method,url},res)
+ })
+ try{
+  await apply(ctx,{cliPath:path,cliHome:home})
+  const first=await call('POST','/codex-cli/api/login')
+  assert.equal(first.body.loginId,'login-1')
+  assert.deepEqual(await call('POST','/codex-cli/api/cancel-login'),{status:200,body:{ok:true}})
+  assert.equal((await call('GET','/codex-cli/api/status')).body.loginPending,false)
+  assert.equal((await call('POST','/codex-cli/api/login')).body.loginId,'login-2')
+ }finally{for(const cleanup of cleanups.reverse())await cleanup();await rm(home,{recursive:true,force:true})}
 })

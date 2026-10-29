@@ -114,8 +114,10 @@ export async function apply(ctx,config={}) {
         pendingLogin={loginId:result.loginId,authUrl:url.href};send(res,200,pendingLogin);return
       }
       if(path==='/codex-cli/api/cancel-login'&&req.method==='POST'){
-        if(pendingLogin)await server.request('account/login/cancel',{loginId:pendingLogin.loginId},lifetime.signal)
-        pendingLogin=undefined;send(res,200,{ok:true});return
+        // Clear first: a restarted CLI rejects the old loginId, and that must not pin a dead login URL.
+        const login=pendingLogin;pendingLogin=undefined
+        if(login)await server.request('account/login/cancel',{loginId:login.loginId},lifetime.signal).catch(()=>{})
+        send(res,200,{ok:true});return
       }
       send(res,req.method==='GET'||req.method==='POST'?404:405,{error:'not found'})
     }catch(error){send(res,500,{error:error.message})}
