@@ -53,7 +53,7 @@ export async function findCli(explicit, env = cliEnvironment(), platform = proce
 
 /** Own one official app-server process and its bounded, cancellable JSON-RPC requests. */
 export class CodexAppServer {
-  constructor(path, env) { this.path=path; this.env=env; this.pending=new Map(); this.listeners=new Set(); this.next=0; this.closed=false; this.starting=undefined; this.child=undefined }
+  constructor(path, env) { this.path=path; this.env=env; this.pending=new Map(); this.listeners=new Set(); this.next=0; this.closed=false; this.starting=undefined; this.child=undefined; this.initTimeout=30000 }
   async start() {
     if (this.closed) throw new Error('Codex 插件已关闭')
     if (this.starting) return this.starting
@@ -86,10 +86,21 @@ export class CodexAppServer {
     })
     // CLI diagnostic output may contain account material. Drain it without logging.
     child.stderr.resume()
-    child.on('error',()=>this.fail(new Error('Codex CLI 无法启动')))
-    child.on('exit',()=>{this.fail(new Error('Codex CLI 已退出'));this.starting=undefined;this.child=undefined})
-    await this.requestRaw('initialize',{clientInfo:{name:'puregamma_harness',title:'PureGamma Harness',version:'0.1.0'},capabilities:{experimentalApi:true}},undefined,30000)
-    this.write({method:'initialized',params:{}})
+    // An unhandled EPIPE on stdin (CLI closed its input) would crash the Host process;
+    // stop the unusable child so its exit lets the next request start a new one.
+    child.stdin.on('error',()=>{if(this.child!==child)return;this.fail(new Error('Codex 连接不可用'));child.kill()})
+    // Events from a replaced child must not reject or detach its successor.
+    child.on('error',()=>{if(this.child===child)this.fail(new Error('Codex CLI 无法启动'))})
+    child.on('exit',()=>{if(this.child!==child)return;this.fail(new Error('Codex CLI 已退出'));this.starting=undefined;this.child=undefined})
+    try {
+      await this.requestRaw('initialize',{clientInfo:{name:'puregamma_harness',title:'PureGamma Harness',version:'0.1.0'},capabilities:{experimentalApi:true}},undefined,this.initTimeout)
+      this.write({method:'initialized',params:{}})
+    } catch (error) {
+      // A failed handshake leaves no orphan behind for the next start() to race with.
+      if(this.child===child)this.child=undefined
+      child.kill('SIGKILL')
+      throw error
+    }
   }
   write(message) { if(!this.child || this.child.stdin.destroyed) throw new Error('Codex 连接不可用');this.child.stdin.write(JSON.stringify(message)+'\n') }
   async request(method,params={},signal,timeout=30000) { await this.start(); return this.requestRaw(method,params,signal,timeout) }

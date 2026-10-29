@@ -80,6 +80,46 @@ readline.createInterface({input:process.stdin}).on('line',line=>{const x=JSON.pa
  }finally{await server.dispose();await rm(home,{recursive:true,force:true})}
 })
 
+const fixture=async(home,body)=>{const path=join(home,'codex');await writeFile(path,'#!/usr/bin/env node\n'+body);await chmod(path,0o700);return path}
+const exited=child=>child.exitCode!==null||child.signalCode!==null?Promise.resolve():new Promise(resolve=>child.once('exit',resolve))
+test('a CLI that closes stdin rejects the request instead of crashing the Host with EPIPE',async()=>{
+ const home=await mkdtemp(join(tmpdir(),'pg-codex-epipe-'))
+ const path=await fixture(home,String.raw`
+const readline=require('node:readline');const rl=readline.createInterface({input:process.stdin})
+rl.on('line',line=>{const x=JSON.parse(line);if(x.method==='initialize'){process.stdout.write(JSON.stringify({id:x.id,result:{}})+'\n',()=>{rl.close();process.stdin.destroy();require('node:fs').closeSync(0)})}})
+setInterval(()=>{},1000)
+`)
+ const server=new CodexAppServer(path,cliEnvironment({...process.env,HOME:home},home))
+ let uncaught;const onUncaught=error=>{uncaught=error};process.on('uncaughtException',onUncaught)
+ try{
+  await server.start();const child=server.child
+  await new Promise(resolve=>setTimeout(resolve,100))
+  await assert.rejects(server.requestRaw('large',{blob:'x'.repeat(4*1024*1024)},undefined,5000),/不可用|已退出|超时/)
+  await exited(child)
+  assert.equal(uncaught,undefined);assert.equal(server.child,undefined)
+ }finally{process.off('uncaughtException',onUncaught);await server.dispose();await rm(home,{recursive:true,force:true})}
+})
+test('a timed-out handshake kills its CLI, and that late exit cannot detach the next child',async()=>{
+ const home=await mkdtemp(join(tmpdir(),'pg-codex-boot-'))
+ const marker=join(home,'started')
+ const path=await fixture(home,String.raw`
+const fs=require('node:fs');const first=!fs.existsSync(${JSON.stringify(marker)});fs.writeFileSync(${JSON.stringify(marker)},'1')
+require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const x=JSON.parse(line);if(first||x.method==='initialized')return;process.stdout.write(JSON.stringify({id:x.id,result:{method:x.method}})+'\n')})
+process.on('SIGTERM',()=>{});setInterval(()=>{},1000)
+`)
+ const server=new CodexAppServer(path,cliEnvironment({...process.env,HOME:home},home))
+ server.initTimeout=200
+ try{
+  const starting=server.start();const stalled=server.child
+  await assert.rejects(starting,/超时/)
+  await exited(stalled)
+  assert.notEqual(stalled.signalCode??stalled.exitCode,null)
+  server.initTimeout=5000
+  assert.deepEqual(await server.request('status'),{method:'status'})
+  assert.notEqual(server.child,stalled);assert.equal(server.child.exitCode,null)
+ }finally{await server.dispose();await rm(home,{recursive:true,force:true})}
+})
+
 test('Windows CLI discovery uses ; and PATHEXT, and keeps Windows runtime variables',async()=>{
  const env=cliEnvironment({Path:'C:\\Tools;C:\\npm',PATHEXT:'.COM;.EXE;.BAT;.CMD;.VBS;.JS',USERPROFILE:'C:\\Users\\me',APPDATA:'C:\\AppData',SystemRoot:'C:\\Windows',ComSpec:'cmd.exe',TEMP:'C:\\Temp',OPENAI_API_KEY:'private'},undefined,'win32')
  assert.equal(env.PATH,'C:\\Tools;C:\\npm')
