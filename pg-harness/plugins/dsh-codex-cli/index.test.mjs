@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
-  PROVIDER, apply, codexStream, conversationPrompt, executable, modelCatalog,
+  PROVIDER, apply, cliEnvironment, codexStream, conversationPrompt, executable, modelCatalog,
 } from './index.js'
 
 const request = () => ({
@@ -113,4 +113,32 @@ test('malformed model or CLI path cannot become an executable command', () => {
   assert.throws(() => executable({ binary: 'bash' }), /absolute path/)
   assert.throws(() => executable({ binary: '/usr/bin/sh' }), /codex executable/)
   assert.deepEqual(modelCatalog({ models: ['codex-default', 'codex-default'] }), ['codex-default'])
+})
+
+test('Codex subprocess never inherits Harness or API secrets', { skip: process.platform === 'win32' }, async () => {
+  const saved = { OPENAI_API_KEY: process.env.OPENAI_API_KEY, DSH_WEB_TOKEN: process.env.DSH_WEB_TOKEN }
+  process.env.OPENAI_API_KEY = 'private-key'
+  process.env.DSH_WEB_TOKEN = 'private-token'
+  const script = [
+    "require('node:fs').readFileSync(0, 'utf8')",
+    "const text = JSON.stringify({ key: process.env.OPENAI_API_KEY ?? null, token: process.env.DSH_WEB_TOKEN ?? null, path: !!process.env.PATH, ci: process.env.CI })",
+    "console.log(JSON.stringify({type:'item.completed',item:{id:'a',type:'agent_message',text}}))",
+    "console.log(JSON.stringify({type:'turn.completed'}))",
+  ].join('\n')
+  try {
+    await withFakeCodex(script, async binary => {
+      const chunks = await collect(codexStream(request(), { binary }))
+      const block = chunks.find(c => c.type === 'block-end')
+      assert.deepEqual(JSON.parse(block.block.text), { key: null, token: null, path: true, ci: '1' })
+    })
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+  const windows = cliEnvironment({ Path: 'C:\\bin', SystemRoot: 'C:\\Windows', OPENAI_API_KEY: 'x' }, 'win32')
+  assert.equal(windows.PATH, 'C:\\bin')
+  assert.equal(windows.SystemRoot, 'C:\\Windows')
+  assert.equal(windows.OPENAI_API_KEY, undefined)
 })
