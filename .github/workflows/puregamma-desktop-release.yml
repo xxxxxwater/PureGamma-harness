@@ -7,7 +7,7 @@ on:
         description: Release version without the v prefix (tag puregamma-harness-v<version>)
         type: string
         required: true
-        default: 0.2.2-alpha.2-pg.1
+        default: 0.2.2-alpha.2-pg.2
       arm64_runner:
         description: GitHub-hosted Apple Silicon runner image for the arm64 build
         type: choice
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_VERSION: ${{ inputs.version || '0.2.2-alpha.2-pg.1' }}
+  RELEASE_VERSION: ${{ inputs.version || '0.2.2-alpha.2-pg.2' }}
 
 concurrency:
   group: puregamma-desktop-release-${{ github.ref }}-${{ inputs.arm64_runner || 'macos-15' }}
