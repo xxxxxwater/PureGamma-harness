@@ -35,10 +35,17 @@ export class SignedGate {
     } catch (error) {
       return { allowed: false, reason: String(error?.message ?? 'missing-or-invalid-binding') }
     }
+    // Resolve the exact proof constraint before candidate selection. A valid
+    // older proof must not hide the proof that resolved every unknown.
+    const unknowns = [...ledger.unknowns.values()]
+    const requiredProofId = unknowns[0]?.resolvedSigned ?? null
+    if (unknowns.some(u => !u.resolvedSigned || u.resolvedSigned !== requiredProofId)) {
+      return { allowed: false, reason: 'open-or-stale-signed-unknowns' }
+    }
     let auth
     try {
       auth = this.vault.authorize(release ? 'release' : 'trade', target,
-        release ? this.config.release.maxAgeSeconds : this.config.trade.maxAgeSeconds, now)
+        release ? this.config.release.maxAgeSeconds : this.config.trade.maxAgeSeconds, now, requiredProofId)
     } catch {
       return { allowed: false, reason: 'attestation-store-unavailable' }
     }

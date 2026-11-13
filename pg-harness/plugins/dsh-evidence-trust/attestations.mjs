@@ -266,8 +266,9 @@ export class AttestationVault {
     // Only valid, unexpired and cryptographically verified envelopes qualify.
     return listProofs(this.root, id => this.read(id, now))
   }
-  authorize(kind, target, maxAgeSeconds, now = Date.now()) {
+  authorize(kind, target, maxAgeSeconds, now = Date.now(), requiredProofId = null) {
     for (const proof of this.list(now)) {
+      if (requiredProofId !== null && proof.id !== requiredProofId) continue
       if (proof.kind !== kind) continue
       const p = proof.payload
       if (now - timestamp(p.issued_at) > maxAgeSeconds * 1000) continue
