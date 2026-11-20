@@ -6,8 +6,8 @@ import {JSDOM} from 'jsdom'
 const requireUi=createRequire(new URL('../../../packages/client/ui-conversation/package.json',import.meta.url))
 const React=requireUi('react')
 
-test('composer plus menu owns its button, inserts reviewed context, and cleans up on unload', async()=>{
- const dom=new JSDOM('<!doctype html><html><head></head><body><div data-composer-card><button aria-haspopup="listbox" aria-label="Original plus">+</button><input type="file" hidden><div id="seat"></div></div></body></html>',{runScripts:'outside-only',url:'http://localhost'})
+test('composer plus menu owns its button, inserts reviewed context, and cleans up on unload', async t=>{
+ const dom=new JSDOM('<!doctype html><html><head></head><body><div data-composer-card><button aria-haspopup="listbox" aria-expanded="false" aria-label="Original plus">+</button><input type="file" hidden><div id="seat"></div></div></body></html>',{runScripts:'outside-only',url:'http://localhost'})
  const previous=new Map()
  for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,navigator:dom.window.navigator,IS_REACT_ACT_ENVIRONMENT:true})){
   previous.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true})
@@ -17,7 +17,9 @@ test('composer plus menu owns its button, inserts reviewed context, and cleans u
  const effects=[]
  const root=createRoot(dom.window.document.querySelector('#seat'))
  try{
-  const ctx={locale:{register(_ns,dictionaries){face=dictionaries.zh;return()=>{}}},effect(fn){effects.push(fn())},slots:{inject(_key,fn){fn()},register(options,view){component=view;face={...face,...options.inject()}}},remote:{skills:{list:async()=>({ok:true,value:{skills:[{name:'review',description:'Review code'}]}})},pluginManager:{listBundles:async()=>({ok:true,value:[{name:'dsh-sentinelx',installed:true,version:'1.0'}]})}},layout:{selectPanel(){}},uiWorkspace:{startSession(){}},get(){return{openBundle(){}}}}
+  const skillResponse = { ok: true, value: { skills: [{ name: 'review', description: 'Review code' }] } }
+  let listSkills = async () => skillResponse
+  const ctx={locale:{register(_ns,dictionaries){face=dictionaries.zh;return()=>{}}},effect(fn){effects.push(fn())},slots:{inject(_key,fn){fn()},register(options,view){component=view;face={...face,...options.inject()}}},remote:{skills:{list:()=>listSkills()},pluginManager:{listBundles:async()=>({ok:true,value:[{name:'dsh-sentinelx',installed:true,version:'1.0'}]})}},layout:{selectPanel(){}},uiWorkspace:{startSession(){}},get(){return{openBundle(){}}}}
   dom.window.__ModuleLoader__={load(module){const plugin=module.factory(name=>name==='react'?React:requireUi(name));assert.ok(plugin.inject.includes('remote.skills'));assert.ok(plugin.inject.includes('remote.pluginManager'));plugin.apply(ctx)}}
   dom.window.eval(readFileSync(new URL('./client.js',import.meta.url),'utf8'))
   const actions={captureInsertion:()=>({revision:1}),insertText(text){draft+=text;return true}}
@@ -38,8 +40,40 @@ test('composer plus menu owns its button, inserts reviewed context, and cleans u
   await open();await click(item('design'));await click(item('ui'));assert.match(draft,/单色矢量图标/)
   await open();await click(item('search'));assert.match(draft,/网页搜索工具/)
   await open();await React.act(async()=>dom.window.document.body.dispatchEvent(new dom.window.MouseEvent('pointerdown',{bubbles:true})));assert.equal(dom.window.document.querySelector('[role=menu]'),null)
-  await React.act(async()=>root.unmount());unloaded=true
-  assert.equal(plus.getAttribute('aria-label'),'Original plus')
+  await t.test('the plus button announces the popup state when toggled', async () => {
+   await open()
+   assert.equal(plus.getAttribute('aria-expanded'), 'true')
+   const popupType = plus.getAttribute('aria-haspopup')
+   await open()
+   assert.equal(dom.window.document.querySelector('[role=menu]'), null)
+   assert.equal(plus.getAttribute('aria-expanded'), 'false')
+   assert.equal(popupType, 'menu')
+  })
+  await t.test('returning from a loading submenu clears its status', async () => {
+   const pending = Promise.withResolvers()
+   listSkills = () => pending.promise
+   try {
+    await open()
+    await click(item('skills'))
+    const menu = dom.window.document.querySelector('[role=menu]')
+    assert.match(menu.textContent, /正在加载/)
+    await click(menu.querySelector('.pg-composer-menu-back'))
+    assert.doesNotMatch(menu.textContent, /正在加载/)
+   } finally {
+    await React.act(async () => pending.resolve(skillResponse))
+    await open()
+   }
+  })
+  await t.test('unloading an open menu restores the native button attributes', async () => {
+   await open()
+   assert.equal(plus.getAttribute('aria-expanded'), 'true')
+   await React.act(async () => root.unmount())
+   unloaded = true
+   assert.equal(plus.getAttribute('aria-label'), 'Original plus')
+   assert.equal(plus.getAttribute('aria-expanded'), 'false')
+   assert.equal(plus.getAttribute('aria-haspopup'), 'listbox')
+   assert.equal(plus.hasAttribute('title'), false)
+  })
  }finally{
   if(!unloaded)await React.act(async()=>root.unmount())
   for(const dispose of effects.reverse())if(typeof dispose==='function')dispose()

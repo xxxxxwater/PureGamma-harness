@@ -3,5 +3,5 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write pg-harness/plugins/dsh-composer-menu/README.md
 /conversation-add-menu:
-  en: 7d694422ebb4789f
-  zh: e0c6728dd12fdace
+  en: ba48cedb1ac57b27
+  zh: 148cafa8108d0021

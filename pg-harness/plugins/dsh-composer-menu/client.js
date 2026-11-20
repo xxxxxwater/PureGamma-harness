@@ -12,13 +12,14 @@ window.__ModuleLoader__.load({ id: 'dsh-composer-menu', factory: require => {
     const workspaces = props.useWorkspaces(value => value?.items ?? [])
     const marker = React.useRef(null), menu = React.useRef(null), plus = React.useRef(null), span = React.useRef(null)
     const [position, setPosition] = React.useState(null), [page, setPage] = React.useState(''), [items, setItems] = React.useState([]), [busy, setBusy] = React.useState(false), [error, setError] = React.useState(''), [query, setQuery] = React.useState('')
-    const close = React.useCallback(() => { setPosition(null); setPage(''); setQuery(''); plus.current?.setAttribute('aria-expanded', 'false') }, [])
+    const close = React.useCallback(() => { setPosition(null); setPage(''); setQuery('') }, [])
     React.useEffect(() => {
       const card = marker.current?.closest('[data-composer-card]')
       const button = card?.querySelector('button[aria-haspopup="listbox"]')
       if (!button) return
       plus.current = button
-      const original = { label: button.getAttribute('aria-label'), title: button.getAttribute('title') }
+      const original = ['aria-label', 'aria-haspopup', 'aria-expanded', 'title']
+        .map(attribute => [attribute, button.getAttribute(attribute)])
       const open = event => {
         event.preventDefault(); event.stopPropagation()
         span.current = props.inputActions.captureInsertion()
@@ -27,16 +28,24 @@ window.__ModuleLoader__.load({ id: 'dsh-composer-menu', factory: require => {
         setPage(''); setQuery(''); setError('')
       }
       button.setAttribute('aria-label', t('title'))
+      button.setAttribute('aria-haspopup', 'menu')
       button.setAttribute('title', t('title'))
       button.addEventListener('click', open, true)
       return () => {
         button.removeEventListener('click', open, true)
-        for (const [key, value] of Object.entries(original)) value === null ? button.removeAttribute(key === 'label' ? 'aria-label' : key) : button.setAttribute(key === 'label' ? 'aria-label' : key, value)
+        for (const [attribute, value] of original) {
+          if (value === null) button.removeAttribute(attribute)
+          else button.setAttribute(attribute, value)
+        }
+        plus.current = null
       }
     }, [props.inputActions, t])
+    const expanded = position !== null
+    React.useEffect(() => {
+      plus.current?.setAttribute('aria-expanded', String(expanded))
+    }, [expanded, props.inputActions, t])
     React.useEffect(() => {
       if (!position) return
-      plus.current?.setAttribute('aria-expanded', 'true')
       const dismiss = event => { if (!menu.current?.contains(event.target) && !plus.current?.contains(event.target)) close() }
       const escape = event => { if (event.key === 'Escape') { event.stopPropagation(); close(); plus.current?.focus() } }
       document.addEventListener('pointerdown', dismiss, true)
@@ -69,8 +78,14 @@ window.__ModuleLoader__.load({ id: 'dsh-composer-menu', factory: require => {
     else if (page === 'github') body = [h('p', { key: 'hint' }, t('repoHint')), h('form', { key: 'form', onSubmit: event => { event.preventDefault(); try { const url = new URL(query); if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.pathname.split('/').filter(Boolean).length < 2 || url.username || url.password) throw new Error(); insert((draft ? '\n\n' : '') + url.href) } catch { setError(t('invalid')) } } }, h('input', { 'aria-label': 'GitHub URL', placeholder: 'https://github.com/owner/repository', value: query, onChange: event => setQuery(event.target.value), autoFocus: true }), h('button', { type: 'submit', className: 'pg-composer-menu-row' }, t('add')))]
     else if (page === 'projects') body = [h('p', { key: 'hint' }, t('workspaceHint')), ...workspaces.map(workspace => row(workspace.workspaceId, workspace.title || workspace.path || workspace.cwd || workspace.workspaceId, () => { close(); menuActions.project(workspace.workspaceId, draft) })), row('folder', t('chooseFolder'), async () => { try { await menuActions.folder(draft); close() } catch (cause) { setError(cause.message) } })]
     else if (page === 'design') body = ['ui', 'components', 'brand'].map(id => row(id, t(id), () => insert((draft ? '\n\n' : '') + t(id + 'Text'))))
-    else body = [h('input', { key: 'query', 'aria-label': t('find'), placeholder: t('find'), value: query, onChange: event => setQuery(event.target.value) }), ...items.filter(item => (item.label + ' ' + (item.detail || '')).toLowerCase().includes(query.toLowerCase())).map(item => row(item.id, item.label, () => { if (page === 'skills') insert('/' + item.id + ' '); else { close(); menuActions.plugin(item.id) } }, false, false, item.detail)), !busy && !items.length ? h('p', { key: 'empty' }, t('empty')) : null, page === 'plugins' ? row('manage', t('manage'), () => { close(); menuActions.manage() }) : null]
-    return h('span', { ref: marker, 'data-pg-composer-menu': '' }, position ? createPortal(h('div', { ref: menu, role: 'menu', 'aria-label': t('title'), className: 'pg-composer-menu', style: position, onKeyDown: event => { if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return; event.preventDefault(); const buttons = [...menu.current.querySelectorAll('button,input')]; const index = buttons.indexOf(document.activeElement); buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus() } }, page ? h('button', { type: 'button', className: 'pg-composer-menu-back', onClick: () => selectPage('') }, icon('back'), t(page)) : null, ...body, busy ? h('p', null, t('loading')) : null, error ? h('p', { role: 'alert' }, error) : null), document.body) : null)
+    else body = [
+      h('input', { key: 'query', 'aria-label': t('find'), placeholder: t('find'), value: query, onChange: event => setQuery(event.target.value) }),
+      ...items.filter(item => (item.label + ' ' + (item.detail || '')).toLowerCase().includes(query.toLowerCase())).map(item => row(item.id, item.label, () => { if (page === 'skills') insert('/' + item.id + ' '); else { close(); menuActions.plugin(item.id) } }, false, false, item.detail)),
+      !busy && !items.length ? h('p', { key: 'empty' }, t('empty')) : null,
+      page === 'plugins' ? row('manage', t('manage'), () => { close(); menuActions.manage() }) : null,
+      busy ? h('p', { key: 'loading' }, t('loading')) : null,
+    ]
+    return h('span', { ref: marker, 'data-pg-composer-menu': '' }, position ? createPortal(h('div', { ref: menu, role: 'menu', 'aria-label': t('title'), className: 'pg-composer-menu', style: position, onKeyDown: event => { if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return; event.preventDefault(); const buttons = [...menu.current.querySelectorAll('button,input')]; const index = buttons.indexOf(document.activeElement); buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus() } }, page ? h('button', { type: 'button', className: 'pg-composer-menu-back', onClick: () => selectPage('') }, icon('back'), t(page)) : null, ...body, error ? h('p', { role: 'alert' }, error) : null), document.body) : null)
   }
   return { inject: ['slots', 'locale', 'layout', 'uiWorkspace', 'workspaces', 'remote', 'remote.skills', 'remote.pluginManager'], apply(ctx) {
     ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'composer-menu: dictionaries')
