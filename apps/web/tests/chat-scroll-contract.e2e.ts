@@ -1305,7 +1305,7 @@ describe('web e2e: long Chat scroll contract', () => {
           const top = viewport.top + element.clientTop
           return Math.max(
             Math.abs((railBox.top + railBox.bottom) / 2 - (top + composerBox.top) / 2),
-            Math.abs(railBox.left - viewport.left - element.clientLeft - 12),
+            Math.abs(railBox.left - viewport.left - element.clientLeft - 8),
             Math.abs(composerBox.top - buttonBox.bottom - 16),
           )
         }), { timeout: 10_000 }).toBeLessThanOrEqual(GEOMETRY_TOLERANCE)
@@ -1332,12 +1332,12 @@ describe('web e2e: long Chat scroll contract', () => {
       const originalStyle = await frame.getAttribute('style')
       try {
         for (const clearance of [16, 8]) {
-          for (const contentWidth of [901, 900, 899, 901]) {
+          for (const contentWidth of [281, 280, 279, 281]) {
             await frame.evaluate((element, { clearance, contentWidth }) => {
               element.style.width = `${contentWidth + 2 * (clearance + 16)}px`
               element.style.setProperty('--dsh-composer-side-clearance', `${clearance}px`)
             }, { clearance, contentWidth })
-            await expect.poll(() => rail.isVisible()).toBe(contentWidth > 900)
+            await expect.poll(() => rail.isVisible()).toBe(contentWidth > 280)
           }
         }
       } finally {
