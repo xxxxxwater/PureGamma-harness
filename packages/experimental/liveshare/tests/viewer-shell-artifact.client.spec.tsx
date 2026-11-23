@@ -2,7 +2,7 @@
 /** The assembled viewer page mounts the normal DSH client UI for the Session its carrier names. */
 
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createFixtureFaces } from './viewer-fixture.client.ts'
 import type { FixtureWorld } from './viewer-fixture.client.ts'
 import { installViewerInputFixture } from './viewer-input-fixture.client.ts'
@@ -52,6 +52,9 @@ describe('Assembled liveshare viewer page', () => {
     Object.defineProperty(navigator, 'languages', { value: ['en-US'], configurable: true })
     owner = createFixtureFaces({ presented: true })
     stopRelay = installViewerRelay({ owner: owner.rpc })
+    // The owner-only reading stream is never opened for a viewer, so its synchronization failure is never reported.
+    const reported = vi.spyOn(console, 'error')
+    onTestFinished(() => { reported.mockRestore() })
 
     // The carrier names the share and the one Session it presents; the viewer opens that Session by
     // itself because it carries no session list of its own.
@@ -85,13 +88,23 @@ describe('Assembled liveshare viewer page', () => {
     // management entries, and no New Session affordance (the endpoints its access snapshot excludes).
     expect(screen.queryByRole('button', { name: /^New session in / })).toBeNull()
     expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Workspace actions for / })).toBeNull()
+    const workspace = inputFixture.context().get('workspaces')?.list.getSnapshot().items[0]
+    if (workspace === undefined) throw new Error('shared Workspace is not listed')
+    const menus = inputFixture.context().get('contextMenus')
+    if (menus === undefined) throw new Error('context menus are not mounted')
+    const workspaceMenu = menus.resolve({ kind: 'workspace', value: {
+      workspaceId: workspace.workspaceId, path: workspace.path, displayTitle: workspace.title,
+    } })
+    await workspaceMenu.ready
+    expect(workspaceMenu.source.getSnapshot()).toEqual([])
+    workspaceMenu.dispose()
     // A Session row keeps its menu for Copy Session ID, and every write verb in it hides itself.
     const rowMenu = screen.getAllByRole('button', { name: /^Session actions for / })[0]
     if (rowMenu === undefined) throw new Error('no Session row menu')
     await act(async () => { fireEvent.click(rowMenu) })
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Copy Session ID'])
+    expect((await screen.findAllByRole('menuitem')).map(item => item.textContent)).toEqual(['Copy Session ID'])
     await act(async () => { fireEvent.keyDown(document, { key: 'Escape' }) })
+    await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
     expect(document.body.textContent).not.toContain('Fork session')
     expect(document.body.textContent).not.toContain('Archive session')
     // Global settings belong to the owner's DSH, so the viewer page boots no settings surface at
@@ -163,16 +176,12 @@ describe('Assembled liveshare viewer page', () => {
         .toBe(true)
     }, { timeout: 15_000 })
 
-    // A file path in the transcript stays readable, and opening it names the reader's own situation:
-    // this page claims workspace-file addresses with its own tab type, whose body states that a share
-    // hands over paths rather than contents, and the page must not hand the reader the type
-    // registry's wiring message instead.
+    // A file path in the transcript stays readable, but a share hands over the Session's data, not the
+    // owner's workspace: the reader's role carries no workspaceFiles endpoint and the page claims no
+    // tab type for one, so opening the path shows no file content.
     const fileLinks = [...document.querySelectorAll<HTMLButtonElement>('button[class*="fileLink"]')]
     expect(fileLinks.length).toBeGreaterThan(0)
     await act(async () => { fireEvent.click(fileLinks[0] as HTMLButtonElement) })
-    await waitFor(() => {
-      expect(document.body.textContent).toContain('This page cannot open workspace files')
-    }, { timeout: 15_000 })
-    expect(document.body.textContent).not.toContain('no registered tab type claims')
+    expect(reported.mock.calls.filter(([message]) => String(message).startsWith('[session-status]'))).toEqual([])
   }, 120_000)
 })

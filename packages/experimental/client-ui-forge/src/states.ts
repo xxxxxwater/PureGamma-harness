@@ -2,16 +2,20 @@
  * The last known state of every change request that a listed Session binds,
  * for the Session list. One run starts with the first stream and stops with
  * the last: it reads the stored states, lists the Sessions with their
- * bindings, follows binding changes of loaded Sessions, and polls each bound
- * change request, once however many Sessions bind it. The forge service
- * owns polling cadence and terminal-state refresh. Every state change is stored, so a restart shows it before the
- * first poll.
+ * bindings, follows binding changes of loaded Sessions, and polls the brief of
+ * each bound change request, once however many Sessions bind it. The forge
+ * service owns polling cadence and terminal-state refresh; a run tells it the
+ * state it already holds, so a merged change request is not read again and one
+ * read by an earlier run of this process waits for its interval. Every state
+ * change is stored, so a restart shows it before the first poll.
  */
 
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
-import type { ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge/types'
+import type {
+  ChangeRequestBrief, ChangeRequestBriefListener, ChangeRequestKnownState, ChangeRequestRef,
+} from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame } from './types.ts'
 
@@ -56,6 +60,13 @@ export interface StoredStates {
   delete(key: string): Promise<boolean>
 }
 
+/** One run's storage handle; closing releases its domain for the next run. */
+export interface OpenedStates {
+  readonly table: StoredStates
+  /** Close the domain after the run's accepted writes settle. */
+  close(): Promise<void>
+}
+
 /** One listed Session and the URLs of its visible bindings, undefined when they are not known without loading it. */
 export interface ListedSession {
   readonly id: SessionId
@@ -70,24 +81,24 @@ export interface ChangeRequestStateSources {
   readonly onBindings: (listener: (id: SessionId, urls: readonly string[]) => void) => () => void
   /** The change request a URL names, or undefined when no provider recognizes it. */
   readonly refOf: (url: string) => ChangeRequestRef | undefined
-  /** Poll a change request until the returned disposer runs. */
-  readonly watch: (ref: ChangeRequestRef, listener: ChangeRequestListener) => () => void
-  /** Open the stored states. */
-  readonly open: () => Promise<StoredStates>
+  /** Poll the brief of a change request until the returned disposer runs; `known` times the first poll. */
+  readonly watch: (ref: ChangeRequestRef, listener: ChangeRequestBriefListener, known?: ChangeRequestKnownState) => () => void
+  /** Open the stored states; the run owns and closes the returned handle. */
+  readonly open: () => Promise<OpenedStates>
   /** Report a failed durable write; the state stays in memory. */
   readonly report: (error: unknown) => void
 }
 
-function listStateOf(snapshot: ChangeRequestSnapshot, url: string): ForgeChangeRequestListState {
+function listStateOf(brief: ChangeRequestBrief, url: string): ForgeChangeRequestListState {
   return {
     url,
-    number: snapshot.ref.number,
-    title: snapshot.title,
-    state: snapshot.state,
-    draft: snapshot.draft,
-    checksRollup: snapshot.checksRollup,
-    reviewDecision: snapshot.reviewDecision,
-    mergeability: snapshot.mergeability,
+    number: brief.ref.number,
+    title: brief.title,
+    state: brief.state,
+    draft: brief.draft,
+    checksRollup: brief.checksRollup,
+    reviewDecision: brief.reviewDecision,
+    mergeability: brief.mergeability,
   }
 }
 
@@ -154,12 +165,19 @@ class Run {
   private readonly writes = new Set<Promise<void>>()
   private stopped = false
 
+  /**
+   * @param sources - what the run reads, follows, and polls.
+   * @param readers - the streams the run publishes to.
+   * @param storage - the stored states, which the run owns and closes.
+   * @param readAt - epoch milliseconds of the latest read of each URL in this process, kept across runs.
+   */
   constructor(
     private readonly sources: ChangeRequestStateSources,
     private readonly readers: ReadonlySet<Reader>,
-    private readonly table: StoredStates,
+    private readonly storage: OpenedStates,
+    private readonly readAt: Map<string, number>,
   ) {
-    for (const [, state] of table.entries()) this.states.set(state.url, state)
+    for (const [, state] of storage.table.entries()) this.states.set(state.url, state)
     // Subscribe before listing; updates received during the read supersede its snapshot.
     this.stopBindings = sources.onBindings((id, urls) => {
       if (this.starting) this.startupBindings.set(id, urls)
@@ -183,7 +201,8 @@ class Run {
     for (const [url] of this.states) {
       if (this.sessionsOf.has(url)) continue
       this.states.delete(url)
-      this.write(() => this.table.delete(storedKey(url)))
+      this.readAt.delete(url)
+      this.write(() => this.storage.table.delete(storedKey(url)))
     }
   }
 
@@ -202,7 +221,11 @@ class Run {
     this.stopBindings()
     for (const stop of this.polls.values()) stop()
     this.polls.clear()
-    await Promise.all(this.writes)
+    try {
+      await Promise.all(this.writes)
+    } finally {
+      await this.storage.close()
+    }
   }
 
   private bind(id: SessionId, urls: readonly string[]): void {
@@ -235,16 +258,22 @@ class Run {
     if (this.polls.has(url)) return
     const ref = this.sources.refOf(url)
     if (ref === undefined) return
+    const state = this.states.get(url)
+    // A stored state that this process has not read counts as read at the epoch, so every state but a merged one is read at once.
+    const known = state === undefined ? undefined : {
+      state: state.state, mergeability: state.mergeability, checksRollup: state.checksRollup, fetchedAt: this.readAt.get(url) ?? 0,
+    }
     this.polls.set(url, this.sources.watch(ref, (update) => {
       if ('failure' in update) return
-      this.settle(url, ids, listStateOf(update.snapshot, url))
-    }))
+      this.readAt.set(url, update.fetchedAt)
+      this.settle(url, ids, listStateOf(update.brief, url))
+    }, known))
   }
 
   private settle(url: string, ids: ReadonlySet<SessionId>, state: ForgeChangeRequestListState): void {
     if (this.stopped || sameState(this.states.get(url), state)) return
     this.states.set(url, state)
-    this.write(() => this.table.put(storedKey(url), state))
+    this.write(() => this.storage.table.put(storedKey(url), state))
     for (const reader of this.readers) if ([...ids].some(reader.allowed)) reader.push(state)
   }
 
@@ -259,6 +288,8 @@ class Run {
 /** Streams the states of the change requests that listed Sessions bind. */
 export class ChangeRequestStates {
   private readonly readers = new Set<Reader>()
+  /** Epoch milliseconds of the latest read of each change request URL, which outlives the runs. */
+  private readonly readAt = new Map<string, number>()
   private stopping: Promise<void> = Promise.resolve()
   private disposed = false
   private run: { readonly started: Promise<Run | undefined>; readonly aborter: AbortController } | undefined
@@ -293,7 +324,7 @@ export class ChangeRequestStates {
   }
 
   /**
-   * End every stream, stop polling, and wait for initialization and accepted storage writes.
+   * End every stream, stop polling, and wait for initialization, accepted writes, and storage closure.
    * @returns settles after all owned work stops; subsequent streams end without starting work.
    */
   async dispose(): Promise<void> {
@@ -309,14 +340,16 @@ export class ChangeRequestStates {
     const started = (async () => {
       await preceding
       aborter.signal.throwIfAborted()
-      const table = await this.sources.open()
-      aborter.signal.throwIfAborted()
-      const run = new Run(this.sources, this.readers, table)
+      const storage = await this.sources.open()
+      let run: Run | undefined
       try {
+        aborter.signal.throwIfAborted()
+        run = new Run(this.sources, this.readers, storage, this.readAt)
         await run.start(aborter.signal)
         return run
       } catch (error) {
-        await run.stop()
+        if (run === undefined) await storage.close()
+        else await run.stop()
         throw error
       }
     })()

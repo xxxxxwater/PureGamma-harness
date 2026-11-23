@@ -522,8 +522,7 @@ describe('deriveTrajectoryLayout', () => {
       // A landed compaction renders no cell, but is still a real log position,
       // so it moves the cursor after the visible context row.
       {
-        kind: 'compaction', seq: 5, time: 9_500, summary: 'checkpoint facts',
-        summaryEventSeq: 4, shadowedItemCount: 2, shadowedTokenCount: 100,
+        kind: 'compaction', seq: 5, summaryEventSeq: 4, time: 9_500, shadowedItemCount: 2, shadowedTokenCount: 100,
       },
       {
         kind: 'assistant', seq: 6, time: 10_000, turn: 1, step: 0,
@@ -601,6 +600,32 @@ describe('run_code sub-dispatch cells', () => {
       text: 'bash', previewMarkdown: '{"x":1}', timeSeconds: 1,
     })
     expect(cells[3]).toMatchObject({ timeSeconds: 0.5 })
+  })
+
+  it.each([true, false])('retains every failed sub-call text block with structured error present: %s', (withError) => {
+    const sub = {
+      ...settledSub(1, 'read', 6_300, 7_300),
+      isError: true,
+      ...(withError ? { error: { name: 'ToolError', code: 'ENOENT' } } : {}),
+      content: [{ type: 'text' as const, text: 'missing.txt does not exist' }, { type: 'text' as const, text: 'Check the file path.\n' }],
+    }
+    const turns = deriveTrajectoryLayout({ nodes: withSubCalls([sub]), partial: null, runningCalls: [] })
+    const cell = turns[0]!.groups.flatMap(group => group.cells).find(cell => cell.kind === 'subtool')
+    expect(cell).toMatchObject({
+      isError: true, resultPreviewMarkdown: 'missing.txt does not exist',
+      outputDetail: 'missing.txt does not exist\nCheck the file path.\n',
+      outputBlocks: sub.content.map(block => ({ type: 'text', content: block.text })),
+    })
+  })
+
+  it('keeps structured failure details when an interrupted tool has no output', () => {
+    const sub = {
+      ...settledSub(1, 'read', 6_300, 7_300),
+      isError: true, error: { name: 'Interrupted', code: 'interrupted' }, content: [],
+    }
+    const turns = deriveTrajectoryLayout({ nodes: withSubCalls([sub]), partial: null, runningCalls: [] })
+    expect(turns[0]!.groups.flatMap(group => group.cells).find(cell => cell.kind === 'subtool'))
+      .toMatchObject({ isError: true, result: 'interrupted', outputDetail: 'Interrupted: interrupted' })
   })
 
   it('a running (unsettled) sub-call renders a subtool cell with blank time', () => {
