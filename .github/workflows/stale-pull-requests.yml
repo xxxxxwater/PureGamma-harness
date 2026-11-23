@@ -17,6 +17,7 @@ concurrency:
 jobs:
   remind:
     name: Remind and close stale pull requests
+    if: github.repository == 'deepseek-ai/deepseek-harness'
     runs-on: ubuntu-latest
     permissions:
       contents: read
