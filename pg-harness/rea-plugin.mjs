@@ -76,10 +76,10 @@ export function ensureReaReleaseArchive(home, {
   return destination
 }
 
-/** Whether selectReaBundle would (re)write the pinned archive spec. */
+/** Whether the profile will use the installer-managed archive after selection. */
 export function reaArchiveNeeded(manifest) {
   const previous = manifest?.dependencies?.[REA_BUNDLE]
-  return previous === undefined || REA_LEGACY_SPECS.includes(previous)
+  return previous === undefined || previous === REA_RELEASE_SPEC || REA_LEGACY_SPECS.includes(previous)
 }
 
 /**

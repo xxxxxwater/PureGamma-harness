@@ -205,9 +205,18 @@ test('REA release archive is downloaded, sha256-verified and installed via file:
     const result = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
     assert.equal(result.dependencies[REA_BUNDLE], REA_RELEASE_SPEC)
     assert.ok(REA_RELEASE_SPEC.startsWith('file:'))
-    assert.deepEqual(readFileSync(join(home, 'bundled-plugin-archives', REA_RELEASE_ARCHIVE)), REA_FIXTURE)
+    const archive = join(home, 'bundled-plugin-archives', REA_RELEASE_ARCHIVE)
+    assert.deepEqual(readFileSync(archive), REA_FIXTURE)
     // A verified cached archive is reused without another download.
     install(home, { rea: { ...OFFLINE.rea, download: () => { throw new Error('unexpected download') } } })
+
+    rmSync(archive)
+    install(home, OFFLINE)
+    assert.deepEqual(readFileSync(archive), REA_FIXTURE)
+
+    writeFileSync(archive, 'corrupted cache')
+    install(home, OFFLINE)
+    assert.deepEqual(readFileSync(archive), REA_FIXTURE)
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
