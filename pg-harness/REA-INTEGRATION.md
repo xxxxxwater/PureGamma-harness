@@ -29,7 +29,8 @@ not a Harness bundle.
    installer uses the app-bundled Node and pnpm and backs up Desktop profile
    manifests and lockfiles in `~/.dsh/pg-harness-backups`.
 3. On fresh installs, the helper registers the versioned standalone REA
-   release asset as a dependency. The first dependency install needs internet.
+   release asset as a dependency. Reinstalls verify the managed archive against
+   its pinned SHA-256. A missing or damaged archive requires internet access to download a replacement.
 4. The helper **also selects `dsh-rea-bundle` in
    `dsh.profile.bundles`**. Dependency installation without this step is
    not enough to activate its Cordis `rea-launcher` and `rea-mcp` rows.
