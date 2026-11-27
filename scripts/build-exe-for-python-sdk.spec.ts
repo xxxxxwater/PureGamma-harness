@@ -167,6 +167,15 @@ describe('Python runtime executable builder CLI', () => {
     expect(result.stdout).not.toMatch(/pnpm\.cmd/i)
   })
 
+  it('uses denser Brotli only for the Linux x64 SEA target', () => {
+    const result = run({}, '--skip-build', '--dry-run', '--targets=node24-linux-x64,node24-linux-arm64')
+    expect(result.status).toBe(0)
+    expect(result.stdout.match(/Linux x64 SEA uses Brotli quality 9/g)).toHaveLength(1)
+    const gzip = run({}, '--skip-build', '--dry-run', '--targets=node24-linux-x64', '--compress=GZip')
+    expect(gzip.status).toBe(0)
+    expect(gzip.stdout).not.toContain('Brotli quality 9')
+  })
+
   it('accepts the macOS x64 pkg target', () => {
     const result = run(
       { npm_execpath: 'C:\\tools\\pnpm.cjs' },
@@ -178,6 +187,7 @@ describe('Python runtime executable builder CLI', () => {
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('exec pkg')
     expect(result.stdout).toContain('--sea --compress Brotli --targets node24.22.3-macos-x64')
+    expect(result.stdout).not.toContain('Brotli quality 9')
     expect(result.stdout).toContain('keep only node-pty prebuilds darwin-x64')
     expect(result.stdout).toContain(`lock optional resource downloads in ${join(root, 'dist-exe', 'macos-x64')}`)
     expect(result.stdout).not.toContain('office-skills')

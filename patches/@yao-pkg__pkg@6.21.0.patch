@@ -9,10 +9,10 @@ index a0cb0de8491d4eff37aba7eaaeeec5934f5a9985..64007c35530e3affb26650c4a251c46d
 -            return zlib.brotliCompressSync;
 +            // DSH patch: pkg calls brotliCompressSync without options, so every
 +            // archive is compressed at Brotli's default quality 11 -- the
-+            // slowest setting. Quality 6 keeps the archive within 12% of that
-+            // size at a fortieth of the build time.
++            // slowest setting. Keep the fast default unless the Python
++            // packager opts into denser compression for its Linux x64 wheel.
 +            return (buf) => zlib.brotliCompressSync(buf, {
-+                params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 6 },
++                params: { [zlib.constants.BROTLI_PARAM_QUALITY]: process.env.DSH_PKG_DENSE_BROTLI === '1' ? 9 : 6 },
 +            });
          case compress_type_1.CompressType.Zstd:
              return (0, compress_type_1.getZstdCompressSync)();
