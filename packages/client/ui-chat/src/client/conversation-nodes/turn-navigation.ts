@@ -3,8 +3,7 @@ import type { ChatNode } from '../contract/chat-nodes.ts'
 import type { ChatLocationNodeIndex, ChatNodeStore, TurnNavigationItem } from '../contract/snapshot.ts'
 
 /**
- * Preview budgets, sized to the rail card's clamps (one prompt line, up to
- * three response lines) and mirrored by the turnOutline projection so a turn
+ * Preview budgets are mirrored by the turnOutline projection so a turn
  * shows the same words before and after its events load. Anything past a
  * budget is invisible; copying whole transcripts into navigation state would
  * otherwise grow with the loaded window on every structural update.

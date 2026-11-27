@@ -165,7 +165,7 @@ describe('client build environment', () => {
     expect(resolveClientBuildEnvironment({ ...parent, ...local }, 'official')).toEqual({
       DSH_CLIENT_BUILD_PROFILE: 'official',
       DSH_CLIENT_COMMIT_HASH: COMMIT_HASH.slice(0, 7),
-      DSH_CLIENT_TITLE: 'DeepSeek Harness',
+      DSH_CLIENT_TITLE: 'PureGamma Harness',
       DSH_CLIENT_VERSION: '1.2.3',
     })
   })

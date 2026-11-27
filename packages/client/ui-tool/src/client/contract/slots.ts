@@ -10,18 +10,13 @@ import type {
 import type { MessageImageLoader, MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { AskUserQuestionAnswerItem, AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions/types'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type { ToolFileInjected } from '../tool/file-menu.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
-     * Keyed Tool call view dispatched by wire Tool name. Any name is allowed,
-     * including tools registered by your package. Register with
-     * `key: '<tool name>'`; a typo never renders.
-     *
-     * Registering an occupied key replaces its view; unclaimed keys use the
-     * generic row. The owner supplies the call identity and running
-     * or settled node through explicit phase props. Every stage supplies
-     * `name` and a lazy `args` view; preparing arguments may be incomplete.
+     * Key by wire name, including custom tools; a typo never renders. Unclaimed keys use the generic row.
+     * Use `key: '<tool name>'` to replace the view; phase data has `name` and lazy, possibly partial `args`.
      */
     'tool.call.toolview': {
       kind: 'keyed'
@@ -154,4 +149,4 @@ export type ToolHostInfoInjected = {
 export type ToolTreeProps = PropsRuntime<'conversation.chat.node', 'tool-call'>
   & PropsRenderSlots<'tool.call.toolview'>
   & PropsLocale<'conversation'>
-  & InjectFace<ToolHostInfoInjected>
+  & InjectFace<ToolHostInfoInjected & ToolFileInjected>

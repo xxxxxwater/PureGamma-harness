@@ -21,10 +21,19 @@
       "path": "../forge"
     },
     {
+      "path": "../forge-session"
+    },
+    {
       "path": "../../subprocess/subprocess"
     },
     {
       "path": "../../util/timeout"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../util/values"
     }
   ]
 }
