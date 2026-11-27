@@ -406,6 +406,8 @@ class SingleExeBuild {
     await this.prepareNativePty(target)
     const platform = target.platform === 'macos' ? 'darwin' : target.platform === 'win' ? 'win32' : target.platform
     if (!this.cli.dryRun) await mkdir(this.outDir, { recursive: true })
+    const denseBrotli = target.platform === 'linux' && target.arch === 'x64' && this.cli.compress === 'Brotli'
+    if (denseBrotli) console.log('build-exe-for-python-sdk: Linux x64 SEA uses Brotli quality 9')
     await this.runPnpm(`pkg ${target.pkgSpec}`, [
       'exec',
       'pkg',
@@ -417,7 +419,7 @@ class SingleExeBuild {
       target.pkgSpec,
       '--output',
       product,
-    ])
+    ], { DSH_PKG_DENSE_BROTLI: denseBrotli ? '1' : '0' })
     if (!this.cli.dryRun && !existsSync(product)) {
       throw new Error(`build-exe-for-python-sdk: product ${product} is missing after the pkg run; inspect ${this.outDir}.`)
     }
@@ -581,8 +583,9 @@ class SingleExeBuild {
    * @param label - the step name used in logs and error messages.
    * @param command - the executable.
    * @param args - its arguments.
+   * @param overrides - environment overrides for this child only.
    */
-  private async run(label: string, command: string, args: string[]): Promise<void> {
+  private async run(label: string, command: string, args: string[], overrides: NodeJS.ProcessEnv = {}): Promise<void> {
     const printable = formatCommand(command, args)
     if (this.cli.dryRun) {
       console.log(`build-exe-for-python-sdk: [dry-run] ${printable}`)
@@ -594,7 +597,7 @@ class SingleExeBuild {
         cwd: root,
         stdio: 'inherit',
         // Artifact builds must not mutate or validate a developer's Git hooks.
-        env: { ...process.env, CI: 'true' },
+        env: { ...process.env, ...overrides, CI: 'true' },
       })
       child.once('error', (error) => {
         reject(new Error(`build-exe-for-python-sdk: ${label} failed to spawn: ${error.message} (${printable})`))
@@ -611,9 +614,9 @@ class SingleExeBuild {
   }
 
   /** Run pnpm through its JavaScript entrypoint when the caller supplies one. */
-  private async runPnpm(label: string, args: string[]): Promise<void> {
+  private async runPnpm(label: string, args: string[], overrides?: NodeJS.ProcessEnv): Promise<void> {
     const [command, invocationArgs] = pnpmInvocation(args)
-    await this.run(label, command, invocationArgs)
+    await this.run(label, command, invocationArgs, overrides)
   }
 }
 
