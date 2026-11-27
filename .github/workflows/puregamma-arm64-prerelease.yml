@@ -1,0 +1,161 @@
+name: PureGamma Apple Silicon prerelease
+on:
+  push:
+    branches: ['build/puregamma-macos-arm64-0.2.3-alpha.2-pg.1']
+permissions:
+  contents: read
+concurrency:
+  group: puregamma-apple-silicon-0.2.3-alpha.2-pg.1
+  cancel-in-progress: false
+env:
+  RELEASE_VERSION: '0.2.3-alpha.2-pg.1'
+  SOURCE_SHA: 'f42fa65edd6410d9e454a787813ad3f688c62f39'
+jobs:
+  mac-arm64:
+    name: Apple Silicon macOS
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          dest: ${{ runner.temp }}/puregamma-pnpm
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Confirm native architecture
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify plugin installation preserves user data
+        run: node --test pg-harness/install.test.mjs
+      - name: Build app and verify packaged runtime
+        run: pnpm run package:desktop:mac:arm64:unsigned --dir
+      - name: Stage app, plugin installer, and guides
+        run: |
+          stage_dir="stage/PureGamma-Harness-${RELEASE_VERSION}"
+          archive="release-assets/puregamma-harness-v${RELEASE_VERSION}-macos-arm64.zip"
+          mkdir -p release-assets "$stage_dir/bundled-plugins"
+          cp -R 'apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/mac-arm64/PureGamma Harness.app' "$stage_dir/"
+          cp 'pg-harness/Install PureGamma Harness.command' pg-harness/README.md pg-harness/README.zh.md "$stage_dir/"
+          chmod +x "$stage_dir/Install PureGamma Harness.command"
+          cp pg-harness/bundled-plugins/inventory.json "$stage_dir/bundled-plugins/"
+          node scripts/verify-puregamma-bundled-plugins.mjs "$stage_dir/PureGamma Harness.app/Contents/Resources/pg-harness"
+          codesign --verify --deep --strict "$stage_dir/PureGamma Harness.app"
+          ditto -c -k --norsrc --keepParent "$stage_dir" "$archive"
+      - name: Verify distributable ZIP after extraction
+        run: |
+          archive="release-assets/puregamma-harness-v${RELEASE_VERSION}-macos-arm64.zip"
+          unzip -tq "$archive"
+          if unzip -Z1 "$archive" | grep -q '^__MACOSX/'; then
+            echo 'ZIP contains unnecessary AppleDouble metadata' >&2
+            exit 1
+          fi
+          mkdir -p extracted
+          ditto -x -k --norsrc "$archive" extracted
+          app="extracted/PureGamma-Harness-${RELEASE_VERSION}/PureGamma Harness.app"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          test "$(lipo -archs "$app/Contents/MacOS/$executable")" = arm64
+          codesign --verify --deep --strict "$app"
+          node scripts/verify-puregamma-bundled-plugins.mjs "$app/Contents/Resources/pg-harness"
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: puregamma-macos-arm64
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Retain packaging diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: puregamma-macos-diagnostics
+          path: apps/desktop/.desktop-build/packaging-runs/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+  publish:
+    name: Publish verified Apple Silicon ZIP
+    needs: mac-arm64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Stage the verified archive
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --name puregamma-macos-arm64 --dir assets
+          cd assets
+          zip="puregamma-harness-v${RELEASE_VERSION}-macos-arm64.zip"
+          test -s "$zip"
+          sha256sum "$zip" > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Publish a new prerelease at the tested source commit
+        working-directory: assets
+        run: |
+          set -euo pipefail
+          tag="puregamma-harness-v${RELEASE_VERSION}"
+          zip="${tag}-macos-arm64.zip"
+          zip_digest="sha256:$(sha256sum "$zip" | cut -d' ' -f1)"
+          sums_digest="sha256:$(sha256sum SHA256SUMS | cut -d' ' -f1)"
+          marker="<!-- actions-run-$GITHUB_RUN_ID -->"
+          # Claim a fresh release. A retry may resume only this run's own output.
+          tag_ref() {
+            gh api "repos/$GH_REPO/git/matching-refs/tags/$tag" --jq ".[] | select(.ref == \"refs/tags/$tag\") | .object.sha"
+          }
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$tag\")" | jq -s . > "$RUNNER_TEMP/releases.json"
+          existing_tag="$(tag_ref)"
+          if jq -e 'length == 0' "$RUNNER_TEMP/releases.json" > /dev/null; then
+            test -z "$existing_tag"
+            notes="$(printf '%s\n\n%s\n\n%s' "Apple Silicon (arm64) desktop ZIP. Ad-hoc signed, without Apple notarization." "Built from $SOURCE_SHA. SHA256SUMS contains the archive checksum." "$marker")"
+            gh release create "$tag" --target "$SOURCE_SHA" --draft --prerelease --latest=false \
+              --title "PureGamma Harness v$RELEASE_VERSION · Apple Silicon" --notes "$notes"
+          else
+            jq -e --arg sha "$SOURCE_SHA" --arg marker "$marker" \
+              'length == 1 and (.[0] | .prerelease and .target_commitish == $sha and (.body | contains($marker)))' "$RUNNER_TEMP/releases.json" >/dev/null
+          fi
+          existing_tag="$(tag_ref)"
+          if test -z "$existing_tag"; then
+            gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" > /dev/null
+          fi
+          test "$(tag_ref)" = "$SOURCE_SHA"
+          release_id="$(gh release view "$tag" --json databaseId --jq .databaseId)"
+          draft="$(gh release view "$tag" --json isDraft --jq .isDraft)"
+          if test "$draft" = true; then
+            gh release upload "$tag" "$zip" SHA256SUMS --clobber
+          fi
+          verify_assets() {
+            jq -e --arg zip "$zip" --arg zip_digest "$zip_digest" --arg sums_digest "$sums_digest" \
+              '(.assets | length == 2) and any(.assets[]; .name == $zip and .digest == $zip_digest and .state == "uploaded") and any(.assets[]; .name == "SHA256SUMS" and .digest == $sums_digest and .state == "uploaded")'
+          }
+          gh api "repos/$GH_REPO/releases/$release_id" | verify_assets >/dev/null
+          if test "$draft" = true; then
+            gh release edit "$tag" --verify-tag --draft=false --prerelease --latest=false
+          fi
+          # The unauthenticated endpoint verifies that both digest-matched assets are publicly visible.
+          for attempt in {1..12}; do
+            if curl -fsSL "$GITHUB_API_URL/repos/$GH_REPO/releases/tags/$tag" -o "$RUNNER_TEMP/public-release.json" &&
+               jq -e '.draft == false and .prerelease == true' "$RUNNER_TEMP/public-release.json" >/dev/null &&
+               verify_assets < "$RUNNER_TEMP/public-release.json" >/dev/null; then
+              echo "Verified $zip ($zip_digest) in public prerelease $tag"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Public release metadata did not confirm both uploaded assets" >&2
+          exit 1
