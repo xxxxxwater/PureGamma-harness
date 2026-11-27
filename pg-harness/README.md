@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Install the release for your computer, add the bundled plugin capabilities, and continue using your existing local Harness data. This source builds PureGamma Harness with upstream engine `0.2.1-rc.2`.
+Install the release for your computer, add the bundled plugin capabilities, and continue using your existing local Harness data. This source builds PureGamma Harness with upstream engine `0.2.3-alpha.2`.
 
 <a id="installation"></a>
 
@@ -68,7 +68,7 @@ SentinelX 0.1.1 declares support for rc.2 through its unchanged bridge and compa
 
 ## Build and verify
 
-Use Node.js 24, the pnpm version in `package.json`, and a native host that matches the target. Install the locked dependencies before building. Each packaging command builds the source, prepares the runtime, and runs the packaged-runtime smoke checks.
+Use Node.js 24.22.3 or newer in the 24.x line, the pnpm version in `package.json`, and a native host that matches the target. Install the locked dependencies before building. Each packaging command builds the source, prepares the runtime, and runs the packaged-runtime smoke checks.
 
 | Target | Command |
 | --- | --- |

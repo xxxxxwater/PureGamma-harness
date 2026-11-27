@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write pg-harness/README.md
 /puregamma-harness-installation-and-plugins:
-  en: 23f9de26ba3f1eab
-  zh: 9db97a5307cf6d7a
+  en: 5240aadc4f8c739d
+  zh: cfbcf23f902e7580
 /puregamma-harness-installation-and-plugins/installation:
   en: 4cdfa85afabc1e56
   zh: f6803f6b12fdf35c
@@ -15,5 +15,5 @@
   en: 4023f242302eae14
   zh: 2360d28b74f3e346
 /puregamma-harness-installation-and-plugins/build-and-verify:
-  en: 01cf5046e41aa721
-  zh: cfea495fb6035b39
+  en: 47fff5a3c927894b
+  zh: 3a724b31c9e0dd86

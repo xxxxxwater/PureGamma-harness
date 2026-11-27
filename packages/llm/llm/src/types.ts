@@ -432,10 +432,10 @@ export interface LlmModelReasoningInfo {
 }
 
 /**
- * How a model applies a system prompt that changes mid-conversation.
- * `'in-history'`: the model reads the latest `system` message at any position
- * of `messages` as the complete effective system prompt, so a changed prompt
- * can follow the cached history instead of rewriting message 0.
+ * Whether a model accepts native system updates within conversation history.
+ * `'in-history'` preserves later system messages as additions or explicit
+ * supersession notices. Without it, the adapter uses its supported prompt or
+ * reminder format. This capability does not select system-section admission.
  */
 export type SystemPromptUpdate = 'in-history'
 
@@ -551,8 +551,17 @@ export interface ToolHistory {
   }[]
 }
 
-/** A single model request, fully assembled. */
-export interface GenerateOptions {
+/** Auxiliary request purposes declared by their producer packages. */
+export interface LlmRequestPurposeMap {}
+
+/** Declared auxiliary request purpose; ordinary conversation requests leave it absent. */
+export type LlmRequestPurpose = Extract<keyof LlmRequestPurposeMap, string>
+
+/**
+ * A single model request, fully assembled.
+ * @typeParam Purpose - declared purpose keys for callers; forwarding adapters may accept `string`.
+ */
+export interface GenerateOptions<Purpose extends string = LlmRequestPurpose> {
   /** Registered provider route selecting the adapter instance. */
   provider: string
   model: string
@@ -593,5 +602,7 @@ export interface GenerateOptions {
    * map the purpose to model-hidden transport metadata. Ordinary conversation
    * requests leave it unset.
    */
-  purpose?: 'compaction' | 'session-title'
+  purpose?: Purpose
 }
+
+export type { MessageId, ToolCallId, ProviderRequestId, LlmAttemptId, ReasoningEffortId } from './brand.ts'

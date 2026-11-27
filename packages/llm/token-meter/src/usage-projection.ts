@@ -166,7 +166,7 @@ export const tokenUsageProjectionDefinition = {
  */
 export const contextPressureProjectionDefinition = {
   key: 'contextPressure',
-  stateVersion: 5,
+  stateVersion: 6,
   stateSchema: contextPressureStateSchema,
   init: () => ({ surfaceTokens: 0 }),
   apply: (state, event) => {
@@ -208,5 +208,6 @@ export const contextPressureProjectionDefinition = {
         ? {}
         : { projectedTokens: Math.max(0, pressureTokens + surfaceTokens - sampledSurfaceTokens) },
     }),
+    summary: false,
   },
 } satisfies ProjectionDefinition<'contextPressure', ContextPressureState>

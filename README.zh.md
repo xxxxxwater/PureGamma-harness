@@ -4,7 +4,7 @@
 
 ![PureGamma Harness 燕子标志](pg-harness/assets/pg-harness-mark-ui.png)
 
-PureGamma Harness 将编程、浏览器自动化、办公、技能和上下文工具整合进一个可定制的智能体工作区。桌面版内置 DeepSeek Harness `0.2.1-rc.2` 引擎，保留其插件架构。
+PureGamma Harness 将编程、浏览器自动化、办公、技能和上下文工具整合进一个可定制的智能体工作区。桌面版内置 DeepSeek Harness `0.2.3-alpha.2` 引擎，保留其插件架构。
 
 [下载桌面版](https://github.com/xxxxxwater/PureGamma-harness/releases) · [安装与插件说明](pg-harness/README.zh.md) · [用户指南](docs/user/guide/index.zh.md)
 
@@ -72,11 +72,11 @@ PureGamma Harness 将编程、浏览器自动化、办公、技能和上下文�
 
 ## 从源码构建
 
-安装 Node.js 24 和仓库指定的 pnpm 版本，然后克隆本版本的 `master` 分支：
+安装 Node.js 24.22.3 或更新的 24.x 版本，以及仓库指定的 pnpm 版本，然后克隆本版本的 `master` 分支：
 
 ```sh
 git clone --branch master https://github.com/xxxxxwater/PureGamma-harness.git
-cd deepseek-harness
+cd PureGamma-harness
 pnpm install --frozen-lockfile
 pnpm run build
 pnpm dsh web

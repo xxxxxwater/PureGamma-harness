@@ -3,12 +3,15 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
+import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import { storedKey, type StoredStates } from '../src/states.ts'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame } from '../src/types.ts'
 import { bench, pullUrl, type Bench } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: (() => Promise<void>)[] = []
 
@@ -31,13 +34,13 @@ function state(number: number): ForgeChangeRequestListState {
 }
 
 /** A panel Remote with one loaded Session, the Sessions the Host lists, their cached summaries, and stored states. */
-async function composed(options: { readonly remoteAccess?: (id: SessionId) => boolean } = {}) {
+async function composed(options: { readonly remoteAccess?: (id: SessionId) => boolean; readonly storage?: DomainFacility } = {}) {
   const cwd = await mkdtemp(join(tmpdir(), 'forge-states-'))
   cleanups.push(() => rm(cwd, { recursive: true, force: true }))
   const b = await bench(cwd)
   cleanups.push(() => b.ctx.fiber.dispose())
-  const cold: SessionHeader = { ...b.session.header, id: SessionId('cold') }
-  const unseen: SessionHeader = { ...b.session.header, id: SessionId('unseen') }
+  const cold: SessionHeader = { ...b.session.header, id: brandString<SessionId>('cold') }
+  const unseen: SessionHeader = { ...b.session.header, id: brandString<SessionId>('unseen') }
   const records = new Map<string, ForgeChangeRequestListState>()
   const put = vi.fn<StoredStates['put']>(async (key, value) => { records.set(key, value) })
   const remove = vi.fn<StoredStates['delete']>(async key => records.delete(key))
@@ -56,7 +59,7 @@ async function composed(options: { readonly remoteAccess?: (id: SessionId) => bo
       }
       : undefined,
   })
-  provide(b.ctx, 'storageDomain', { open: async () => ({ table: () => table }) })
+  provide(b.ctx, 'storageDomain', options.storage ?? { open: async () => ({ table: () => table, close: async () => {} }) })
   if (options.remoteAccess !== undefined) {
     const allows = options.remoteAccess
     provide(b.ctx, 'remoteAccess', { allows: ({ id }: { readonly id: SessionId }) => allows(id) })
@@ -80,6 +83,10 @@ function reader(b: Bench) {
   })
   return {
     frames,
+    async close(): Promise<void> {
+      aborter.abort()
+      await iterator.return?.(undefined)
+    },
     async until(
       predicate: (states: ReadonlyMap<string, ForgeChangeRequestListState>) => boolean,
     ): Promise<ReadonlyMap<string, ForgeChangeRequestListState>> {
@@ -97,6 +104,29 @@ function reader(b: Bench) {
 }
 
 describe('forgePanel.changeRequestStates', () => {
+  it('restores stored states when the last list subscriber leaves and another subscribes', async () => {
+    const storageContext = new Context()
+    const backend = new MemoryStorageBackend(new MemoryMediaPool())
+    provide(storageContext, 'storage', { backend: { get: () => backend } })
+    const storage = new DomainFacility(storageContext, { backend: 'memory', routes: {} })
+    cleanups.push(async () => { await storage.closeAll(); await storageContext.fiber.dispose() })
+    const { b } = await composed({ storage })
+    b.ctx.forgeSession.track(b.session, pullUrl(7))
+    const first = reader(b)
+    await first.until(states => states.has(pullUrl(7)))
+    await first.close()
+
+    const second = reader(b)
+    expect((await second.until(states => states.has(pullUrl(7)))).get(pullUrl(7))).toEqual(state(7))
+    expect(second.frames[0]?.states).toContainEqual(state(7))
+    await second.close()
+    expect(storage.get('forge_panel_change_requests')).toBeUndefined()
+
+    await reader(b).until(states => states.has(pullUrl(7)))
+    await b.ctx.fiber.dispose()
+    expect(storage.get('forge_panel_change_requests')).toBeUndefined()
+  })
+
   it('streams the states of the visible bindings of loaded and cached Sessions, then of later bindings', async () => {
     const { b, records } = await composed()
     b.ctx.forgeSession.track(b.session, pullUrl(7))
@@ -107,7 +137,7 @@ describe('forgePanel.changeRequestStates', () => {
     expect([...first.values()]).toEqual(expect.arrayContaining([state(7), state(8)]))
     expect(first.has(pullUrl(10))).toBe(false)
     // Other client-visible units of a loaded Session change without rebinding anything.
-    b.session.append('working-directory/change', { cwd: `${b.session.header.cwd ?? ''}/sub` })
+    b.session.append('workspace-root/change', { cwd: `${b.session.header.cwd ?? ''}/sub` })
     b.ctx.forgeSession.track(b.session, pullUrl(9))
     expect((await r.until(states => states.has(pullUrl(9)))).get(pullUrl(9))).toEqual(state(9))
     expect(records.get(storedKey(pullUrl(9)))).toEqual(state(9))
