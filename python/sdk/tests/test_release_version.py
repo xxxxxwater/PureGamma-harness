@@ -38,6 +38,34 @@ def test_wheel_verification_uses_distribution_metadata_not_nested_libraries(tmp_
     build_python_release.verify_wheel(wheel, "sdk", "1.2.3", None)
 
 
+def test_oversized_wheel_reports_largest_compressed_members(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wheel = tmp_path / "oversized.whl"
+    with zipfile.ZipFile(wheel, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("large-raw.bin", b"x" * 8192)
+        archive.writestr("large-compressed.bin", bytes(range(256)))
+        for index in range(10):
+            archive.writestr(f"small-{index:02}.bin", b"")
+    limit = wheel.stat().st_size - 1
+    monkeypatch.setitem(build_python_release.verify_wheel.__globals__, "PYPI_FILE_SIZE_LIMIT", limit)
+
+    with pytest.raises(RuntimeError, match=rf"limit of {limit} bytes by 1 bytes") as error:
+        build_python_release.verify_wheel(wheel, "runtime", "1.2.3", None)
+
+    message = str(error.value)
+    assert message.index("large-compressed.bin") < message.index("large-raw.bin")
+    assert "compressed /" in message
+    assert message.count(".bin'") == 10
+
+
+def test_oversized_non_zip_is_still_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wheel = tmp_path / "invalid.whl"
+    wheel.write_bytes(b"not a zip")
+    monkeypatch.setitem(build_python_release.verify_wheel.__globals__, "PYPI_FILE_SIZE_LIMIT", 1)
+
+    with pytest.raises(RuntimeError, match="Wheel member sizes are unavailable"):
+        build_python_release.verify_wheel(wheel, "runtime", "1.2.3", None)
+
+
 def test_release_tag_must_match_repository_version() -> None:
     build_python_release.validate_release_tag("python-v1.2.3", "1.2.3")
 

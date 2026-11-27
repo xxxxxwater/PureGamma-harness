@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SDK_DISTRIBUTION = "deepseek-harness-sdk"
 RUNTIME_DISTRIBUTION = "deepseek-harness-runtime-bin"
 PLATFORM_MANIFEST = ROOT / "python" / "sdk-runtime" / "platforms.json"
+PYPI_FILE_SIZE_LIMIT = 100_000_000
 
 
 def load_platforms(path: Path = PLATFORM_MANIFEST) -> dict[str, tuple[str, str]]:
@@ -235,8 +236,26 @@ def verify_wheel(
     version: str,
     platform: tuple[str, str] | None,
 ) -> None:
-    if wheel.stat().st_size > 100_000_000:
-        raise RuntimeError(f"{wheel} is {wheel.stat().st_size} bytes and exceeds the PyPI single-file limit of 100000000 bytes")
+    size = wheel.stat().st_size
+    if size > PYPI_FILE_SIZE_LIMIT:
+        message = (
+            f"{wheel} is {size} bytes and exceeds the PyPI single-file limit "
+            f"of {PYPI_FILE_SIZE_LIMIT} bytes by {size - PYPI_FILE_SIZE_LIMIT} bytes"
+        )
+        # A failed build does not upload a wheel. Read the central directory
+        # here so the CI log still identifies which members cost the most bytes.
+        try:
+            with zipfile.ZipFile(wheel) as archive:
+                largest = sorted(archive.infolist(), key=lambda member: (-member.compress_size, member.filename))[:10]
+            if largest:
+                entries = "\n".join(
+                    f"  {member.compress_size:>12} compressed / {member.file_size:>12} raw  {member.filename!r}"
+                    for member in largest
+                )
+                message += "\nLargest wheel members (bytes):\n" + entries
+        except (zipfile.BadZipFile, OSError):
+            message += "\nWheel member sizes are unavailable."
+        raise RuntimeError(message)
     expected_tag = "py3-none-any" if platform is None else f"py3-none-{platform[0]}"
     expected_distribution = SDK_DISTRIBUTION if package == "sdk" else RUNTIME_DISTRIBUTION
     dist_info = f"{expected_distribution.replace('-', '_')}-{version}.dist-info"
