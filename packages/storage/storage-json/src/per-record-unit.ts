@@ -192,7 +192,7 @@ async function readRecord(path: string, versions: readonly number[]): Promise<un
  */
 export class PerRecordJsonUnit implements KvUnit {
   private closed = false
-  /** Set when a failed batch could not restore its staged documents. */
+  /** Set when a failed write or delete left the durable state uncertain. */
   private unusable: StorageError | undefined
   /** In-flight durable writes; close() drains them before releasing the unit. */
   private readonly inFlight = new Set<Promise<void>>()
@@ -352,7 +352,12 @@ export class PerRecordJsonUnit implements KvUnit {
   private async writeDocument(path: string, value: unknown): Promise<void> {
     const text = serializeRecord(this.descriptor.version, value)
     await mkdir(dirname(path), { recursive: true, mode: 0o700 })
-    await writeAtomic(path, text)
+    try {
+      await writeAtomic(path, text)
+    } catch (error) {
+      if (error instanceof StorageError && error.code === 'unknown-state') this.unusable = error
+      throw error
+    }
   }
 
   /** Track one durable write so close() drains it. */

@@ -54,6 +54,8 @@ export async function openSingleUnit(
 
 class SingleJsonUnit implements KvUnit {
   private closed = false
+  /** Set when a published replacement's durability could not be confirmed. */
+  private unusable: StorageError | undefined
   /** In-flight publishes; close() drains them before releasing the unit. */
   private readonly inFlight = new Set<Promise<void>>()
 
@@ -103,8 +105,8 @@ class SingleJsonUnit implements KvUnit {
       records.delete(key)
     }
     if (removed.size === 0) return
-    // One atomic publish applies the whole batch; a failed publish restores
-    // every removed entry so memory and the medium stay together.
+    // Restore memory on rejection. If the replacement already published, the
+    // unit is quarantined and its in-memory values are no longer readable.
     await this.publish().catch((error: unknown) => {
       for (const [key, value] of removed) records.set(key, value)
       throw error
@@ -139,6 +141,7 @@ class SingleJsonUnit implements KvUnit {
     if (this.closed) {
       throw new StorageError('closed', `unit '${this.descriptor.name}' is closed`)
     }
+    if (this.unusable !== undefined) throw this.unusable
   }
   /* jscpd:ignore-end */
 
@@ -151,7 +154,10 @@ class SingleJsonUnit implements KvUnit {
   }
 
   private async publish(): Promise<void> {
-    const write = writeAtomic(this.path, serialize(this.descriptor.name, this.state))
+    const write = writeAtomic(this.path, serialize(this.descriptor.name, this.state)).catch((error: unknown) => {
+      if (error instanceof StorageError && error.code === 'unknown-state') this.unusable = error
+      throw error
+    })
     this.inFlight.add(write)
     // Swallow only on the tracking branch: the caller still awaits `write`
     // itself, so rejections stay observed exactly once.

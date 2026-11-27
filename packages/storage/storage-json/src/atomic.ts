@@ -14,6 +14,7 @@
 import { open, rename, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { StorageError } from '@deepseek-ai/dsh-storage'
 
 /**
  * Durably replace `path` with `data`.
@@ -32,10 +33,16 @@ export async function writeAtomic(path: string, data: string): Promise<void> {
       await handle.close()
     }
     await rename(tmp, path)
-    await fsyncDirectory(dirname(path))
   } catch (error) {
     await rm(tmp, { force: true })
     throw error
+  }
+  try {
+    await fsyncDirectory(dirname(path))
+  } catch (cause) {
+    // The target has already changed. Do not report an unapplied write or
+    // attempt to roll it back without a known durable previous version.
+    throw new StorageError('unknown-state', 'JSON replacement published but directory sync failed', { cause })
   }
 }
 
