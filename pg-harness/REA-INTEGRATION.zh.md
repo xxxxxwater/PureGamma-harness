@@ -27,7 +27,8 @@ REA 的 `main` 已领先于该稳定插件绑定的引擎版本；更新 Git 主
    安装器使用应用内置 Node/pnpm，将 Desktop Profile 和锁文件
    备份到 `~/.dsh/pg-harness-backups`。
 3. 如果没有 REA 插件依赖，安装器添加经过版本固定的 `dsh-v0.2.0`
-   独立插件压缩包地址；首次获取依赖需要网络。
+   独立插件压缩包地址。重新安装时会核对托管压缩包的 SHA-256，
+   文件缺失或损坏时需要联网重新下载。
 4. **安装器还会把 `dsh-rea-bundle` 追加进
    `dsh.profile.bundles`**。只在 `dependencies` 中有包名并不足以启用，
    必须让 Cordis 合成 `rea-launcher` 和 `rea-mcp`。

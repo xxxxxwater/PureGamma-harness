@@ -211,6 +211,27 @@ test('REA release archive is downloaded, sha256-verified and installed via file:
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
+for (const cache of ['missing', 'corrupt']) {
+  test(`reinstall restores a ${cache} managed REA archive`, () => {
+    const home = mkdtempSync(join(tmpdir(), 'pg-rea-reinstall-'))
+    try {
+      const profile = join(home, 'profiles', 'desktop')
+      mkdirSync(profile, { recursive: true })
+      writeFileSync(join(profile, 'package.json'), JSON.stringify({ dependencies: { [REA_BUNDLE]: REA_RELEASE_SPEC } }))
+      const archiveDir = join(home, 'bundled-plugin-archives')
+      const archive = join(archiveDir, REA_RELEASE_ARCHIVE)
+      if (cache === 'corrupt') {
+        mkdirSync(archiveDir)
+        writeFileSync(archive, 'incomplete archive')
+      }
+
+      install(home, OFFLINE)
+
+      assert.deepEqual(readFileSync(archive), REA_FIXTURE)
+    } finally { rmSync(home, { recursive: true, force: true }) }
+  })
+}
+
 test('tampered REA release archive fails closed without changing the profile', () => {
   const home = mkdtempSync(join(tmpdir(), 'pg-rea-tampered-'))
   try {
