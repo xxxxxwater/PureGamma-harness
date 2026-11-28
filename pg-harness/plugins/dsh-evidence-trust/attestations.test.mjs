@@ -177,3 +177,40 @@ test('a failed authorization receipt never dispatches a trade and never refunds 
   assert.equal(gate.decide(invoke('trade_place', order), new TrustLedger(root, 'session-after-crash'), true).allowed, false)
   assert.equal(ledger.authorizations.size, 0)
 }))
+
+for (const reverse of [false, true]) {
+  test('signed unknown chooses its exact proof independent of enumeration: reverse=' + reverse, () => withState(({ vault, gate, ledger }) => {
+    const now = Date.now()
+    const old = vault.import(signEnvelope(releasePayload(now), priv, 'ci-v1'), now)
+    const source = ledger.observe(invoke('read_file', {}), { isError: false })
+    const unknown = ledger.openUnknown(source, 'Verify current release')
+    const fresh = vault.import(signEnvelope({
+      ...releasePayload(now), issued_at: stamp(now, 1000),
+    }, priv, 'ci-v1'), now)
+    ledger.resolveUnknownSigned(unknown, vault.read(fresh.id, now))
+    const list = vault.list.bind(vault)
+    vault.list = at => list(at).sort((a, b) =>
+      (a.id === old.id ? -1 : 1) * (reverse ? -1 : 1))
+    for (const reserve of [false, true]) {
+      const result = gate.decide(invoke('publish_release', release), ledger, reserve, now)
+      assert.equal(result.allowed, true)
+      assert.equal(result.proof_id, fresh.id)
+    }
+    assert.equal(ledger.authorizations.size, 1)
+    // Even with a valid alternative, a mismatched target must fail.
+    assert.equal(gate.decide(invoke('publish_release', { ...release, run_id: '999' }), ledger, false, now).allowed, false)
+    assert.equal(gate.decide(invoke('publish_release', release), ledger, false, now + 121000).allowed, false)
+    // A second unresolved or differently resolved question still blocks.
+    const second = ledger.openUnknown(source, 'Verify other requirement')
+    assert.equal(gate.decide(invoke('publish_release', release), ledger, false, now).allowed, false)
+    const third = vault.import(signEnvelope({
+      ...releasePayload(now), issued_at: stamp(now, 2000),
+    }, priv, 'ci-v1'), now)
+    ledger.resolveUnknownSigned(second, vault.read(third.id, now))
+    assert.equal(gate.decide(invoke('publish_release', release), ledger, false, now).allowed, false)
+    // Damaging the exact proof cannot fall back to another valid proof.
+    ledger.resolveUnknownSigned(second, vault.read(fresh.id, now))
+    writeFileSync(join(vault.root, fresh.id + '.json'), '{}')
+    assert.equal(gate.decide(invoke('publish_release', release), ledger, false, now).allowed, false)
+  }))
+}
