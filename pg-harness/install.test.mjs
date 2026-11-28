@@ -98,6 +98,59 @@ test('upgrades only the prior PureGamma-bundled dsh-purge archive', () => {
   } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
+test('keeps custom dsh-purge archives disabled even when they use the bundled filename', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-custom-purge-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    const manifest = join(profile, 'package.json')
+    const archive = 'dsh-purge-1.1.71-puregamma.3.tgz'
+    for (const source of [
+      'file:../shared/bundled-plugin-archives/' + archive,
+      'https://mirror.example/bundled-plugin-archives/' + archive,
+    ]) {
+      writeFileSync(manifest, JSON.stringify({
+        dependencies: { 'dsh-purge': source }, dsh: { profile: { bundles: [] } },
+      }))
+      install(home, OFFLINE)
+      const updated = JSON.parse(readFileSync(manifest, 'utf8'))
+      assert.equal(updated.dependencies['dsh-purge'], source)
+      assert.ok(!updated.dsh.profile.bundles.includes('dsh-purge'))
+    }
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
+test('only an outdated managed purge install requires pnpm on a complete profile', () => {
+  const home = mkdtempSync(join(tmpdir(), 'pg-custom-purge-cli-'))
+  try {
+    const profile = join(home, 'profiles', 'desktop')
+    mkdirSync(profile, { recursive: true })
+    writeFileSync(join(profile, 'package.json'), JSON.stringify({
+      dependencies: {
+        'dsh-purge': 'file:../shared/bundled-plugin-archives/dsh-purge-1.1.71-puregamma.4.tgz',
+        [REA_BUNDLE]: '1.0.0',
+      },
+      dsh: { profile: { bundles: [] } },
+    }))
+    install(home, OFFLINE)
+    const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8'))
+    for (const [name, spec] of Object.entries(manifest.dependencies)) {
+      if (spec.startsWith('link:')) continue
+      const dir = join(profile, 'node_modules', name)
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '1.0.0' }))
+    }
+    const runInstaller = () => execFileSync(process.execPath, [fileURLToPath(new URL('./install.mjs', import.meta.url))], {
+      env: { ...process.env, DSH_HOME: home },
+      stdio: 'pipe',
+    })
+    runInstaller()
+    manifest.dependencies['dsh-purge'] = 'file:../../bundled-plugin-archives/dsh-purge-1.1.71-puregamma.4.tgz'
+    writeFileSync(join(profile, 'package.json'), JSON.stringify(manifest))
+    assert.throws(runInstaller, /Run the installer beside the packaged PureGamma Harness app/)
+  } finally { rmSync(home, { recursive: true, force: true }) }
+})
+
 test('bundled purge refreshes its old default prompt and recognizes the native app for restart', async () => {
   const home = mkdtempSync(join(tmpdir(), 'pg-purge-compat-'))
   try {

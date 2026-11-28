@@ -3,11 +3,18 @@ import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, r
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installUniverPreviewBridge } from './plugin-patches/univer-office/patch.mjs'
 import { installBundledPluginCompatibility } from './plugin-patches/bundled-compat.mjs'
 import { ensureReaReleaseArchive, reaArchiveNeeded, selectReaBundle } from './rea-plugin.mjs'
+
+/** Match the archive in this desktop profile's own Harness data directory. */
+function usesBundledPurge(spec, profile, version) {
+  if (typeof spec !== 'string' || !spec.startsWith('file:')) return false
+  const archive = resolve(profile, '../../bundled-plugin-archives', `dsh-purge-${version}.tgz`)
+  return relative(archive, resolve(profile, spec.slice('file:'.length))) === ''
+}
 
 /**
  * Install PureGamma UI packages into the reserved desktop profile with reversible backups.
@@ -70,9 +77,7 @@ export function install(home = process.env.DSH_HOME || join(homedir(), '.dsh'), 
       // cause PI_AI_ERROR; never replace a separately installed dsh-purge.
       const previous = manifest.dependencies[plugin.name]
       const priorBundledPurge = plugin.name === 'dsh-purge'
-        && typeof previous === 'string'
-        && previous.replaceAll('\\', '/').includes('bundled-plugin-archives/')
-        && previous.endsWith('dsh-purge-1.1.71-puregamma.3.tgz')
+        && usesBundledPurge(previous, profile, '1.1.71-puregamma.3')
       if (previous !== undefined && !priorBundledPurge) continue
       if (priorBundledPurge) upgradedBundledPurge = true
       const archive = join(dirname(inventoryPath), plugin.archive)
@@ -114,7 +119,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
   const purgeVersion = existsSync(join(profile, 'node_modules', 'dsh-purge', 'package.json'))
     ? JSON.parse(readFileSync(join(profile, 'node_modules', 'dsh-purge', 'package.json'), 'utf8')).version
     : ''
-  const purgeUpgradePending = purgeArchive.includes('bundled-plugin-archives/dsh-purge-1.1.71-puregamma.4.tgz')
+  const purgeUpgradePending = usesBundledPurge(purgeArchive, profile, '1.1.71-puregamma.4')
     && purgeVersion !== '1.1.71-puregamma.4'
   if (missing || purgeUpgradePending) {
     const resources = resolve(dirname(fileURLToPath(import.meta.url)), '..')
