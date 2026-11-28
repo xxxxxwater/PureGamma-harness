@@ -5,7 +5,9 @@ import { runInNewContext } from 'node:vm'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { cliEnvironment, findCodex, instruction, runCodex } from './index.js'
+import { PassThrough } from 'node:stream'
+import { EventEmitter } from 'node:events'
+import { apply, cliEnvironment, findCodex, instruction, runCodex } from './index.js'
 
 function mountedClient() {
   const hooks = []
@@ -105,4 +107,37 @@ test('runCodex does not pass ambient secrets and honors the configured model', {
     else process.env.OPENAI_API_KEY = saved
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('the two-run limit also counts requests whose body is still uploading', async () => {
+  let handler
+  apply({
+    effect(fn) { fn() },
+    webServer: { register(route) { handler = route.handler; return () => {} } },
+    connection: { requestRejection: () => undefined },
+  }, { cliPath: '/nonexistent/codex' })
+  const call = body => {
+    const req = Object.assign(body, { method: 'POST', url: '/pg-prompt-pro/api/enhance' })
+    const res = Object.assign(new EventEmitter(), {
+      writableEnded: false, destroyed: false,
+      writeHead(status) { this.status = status },
+      end(text) { this.writableEnded = true; this.body = JSON.parse(text) },
+    })
+    return { res, done: handler(req, res) }
+  }
+  const slow = [new PassThrough(), new PassThrough()]
+  const pending = slow.map(call)
+  await new Promise(resolve => setImmediate(resolve))
+  const third = call(new PassThrough())
+  await third.done
+  assert.equal(third.res.status, 429)
+  for (const body of slow) body.end('not json')
+  await Promise.all(pending.map(p => p.done))
+  assert.deepEqual(pending.map(p => p.res.status), [500, 500])
+  // Finished requests release their slots.
+  const body = new PassThrough()
+  const after = call(body)
+  body.end('not json')
+  await after.done
+  assert.equal(after.res.status, 500)
 })

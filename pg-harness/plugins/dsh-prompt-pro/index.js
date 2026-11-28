@@ -106,6 +106,11 @@ export function apply(ctx, config = {}) {
     if (new URL(req.url ?? '/', 'http://local').pathname !== '/pg-prompt-pro/api/enhance') return send(res, 404, { error: 'not found' })
     if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' })
     if (active.size >= 2) return send(res, 429, { error: '已有两项增强正在运行，请稍后重试' })
+    // Reserve the slot before reading the body, so slowly uploaded requests
+    // cannot all pass the check above and then spawn unbounded Codex runs.
+    const controller = new AbortController()
+    active.add(controller)
+    res.once('close', () => controller.abort())
     let raw = ''
     try {
       for await (const chunk of req) {
@@ -114,13 +119,11 @@ export function apply(ctx, config = {}) {
       }
       const draft = JSON.parse(raw).draft
       if (typeof draft !== 'string' || !draft.trim() || draft.length > MAX_DRAFT) return send(res, 400, { error: '请输入 1–12000 字的草稿' })
-      const controller = new AbortController()
-      active.add(controller)
-      res.once('close', () => controller.abort())
-      try { send(res, 200, { text: await runCodex(draft.trim(), { cliPath: cliPath ?? findCodex(), model, signal: controller.signal }) }) }
-      finally { active.delete(controller) }
+      send(res, 200, { text: await runCodex(draft.trim(), { cliPath: cliPath ?? findCodex(), model, signal: controller.signal }) })
     } catch (error) {
       send(res, 500, { error: error.message || '提示词增强失败' })
+    } finally {
+      active.delete(controller)
     }
   } }), 'prompt-pro: authenticated enhance endpoint')
   ctx.effect(() => () => { for (const controller of active) controller.abort() }, 'prompt-pro: cancel active calls')

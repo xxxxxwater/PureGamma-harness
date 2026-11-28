@@ -13,6 +13,25 @@ const MAX_INPUT = 1024 * 1024
 const MAX_OUTPUT = 8 * 1024 * 1024
 const MAX_DURATION = 5 * 60 * 1000
 const MODEL_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,100}$/
+const WINDOWS_ENV = ['USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SystemRoot', 'SystemDrive', 'PATHEXT', 'ComSpec', 'TEMP', 'TMP', 'windir', 'ProgramFiles', 'ProgramData', 'HOMEDRIVE', 'HOMEPATH']
+
+/**
+ * The read-only sandbox still lets the model run commands such as `env`, so
+ * pass only runtime and transport variables, never Harness or API secrets.
+ */
+export function cliEnvironment(environment = process.env, platform = process.platform) {
+  const names = ['HOME', 'USER', 'LOGNAME', 'SHELL', 'PATH', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'CODEX_HOME',
+    'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy']
+  if (platform === 'win32') names.push(...WINDOWS_ENV)
+  // Windows variable names are case-insensitive (PATH is often spelled Path).
+  const canonical = new Map(names.map(name => [platform === 'win32' ? name.toUpperCase() : name, name]))
+  const env = {}
+  for (const [key, value] of Object.entries(environment)) {
+    const name = canonical.get(platform === 'win32' ? key.toUpperCase() : key)
+    if (name && typeof value === 'string') env[name] ??= value
+  }
+  return { ...env, CI: '1', TERM: 'dumb', NO_COLOR: '1' }
+}
 
 export function modelCatalog(config = {}) {
   const models = config.models ?? DEFAULT_MODELS
@@ -117,7 +136,7 @@ export async function* codexStream(options, config = {}) {
     child = spawn(binary, args, {
       cwd, shell: false, windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, CI: '1', TERM: 'dumb', NO_COLOR: '1' },
+      env: cliEnvironment(),
     })
   } catch {
     rmSync(cwd, { recursive: true, force: true })
